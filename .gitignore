@@ -1,0 +1,28 @@
+# Python 캐시 파일
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 가상 환경
+venv/
+.venv/
+env/
+.env
+
+# 프로젝트 로컬 설정 및 임시 데이터
+favorites.json
+favorites_web.json
+alerts.json
+Fibo_Backtest_Report.csv
+*.md
+!README.md
+!walkthrough.md
+!implementation_plan.md
+!task.md
+
+# OS 생성 파일
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
