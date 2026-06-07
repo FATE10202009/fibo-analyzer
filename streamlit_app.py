@@ -297,6 +297,19 @@ def get_marquee_prices(favorites):
     if not tickers:
         return "📊 즐겨찾기에 자산을 등록해 주세요."
     try:
+        # 실시간 적용 환율 조회
+        usd_krw_rate = 1380.0
+        try:
+            rate_df = yf.download("USDKRW=X", period="5d", interval="1d", progress=False)
+            if not rate_df.empty:
+                if rate_df.columns.nlevels > 1:
+                    rate_df.columns = rate_df.columns.droplevel(1)
+                rate_df = rate_df.dropna(subset=['Close'])
+                if not rate_df.empty:
+                    usd_krw_rate = float(rate_df['Close'].iloc[-1])
+        except Exception as e:
+            print(f"[Marquee] 환율 로드 실패: {e}")
+
         data = yf.download(tickers, period="5d", interval="1d", group_by="ticker", progress=False)
         marquee_items = []
         for name, ticker in favorites:
@@ -317,7 +330,7 @@ def get_marquee_prices(favorites):
                 pct = (diff / close_yesterday) * 100
                 
                 is_usd = not (ticker.endswith('.KS') or ticker.endswith('.KQ'))
-                price_str = f"${close_today:,.2f}" if is_usd else f"₩{close_today:,.0f}"
+                price_str = fmt_price(close_today, usd_krw_rate, is_usd)
                 
                 if pct >= 0:
                     item = f"<span style='color:#FF5252; font-weight:bold;'>{name}: {price_str} ▲{pct:.2f}%</span>"
