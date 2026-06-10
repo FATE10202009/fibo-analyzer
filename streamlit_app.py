@@ -8,6 +8,8 @@ import os
 import json
 import traceback
 import streamlit.components.v1 as components
+import datetime
+
 
 # 프로젝트 핵심 분석 모듈 임포트
 from search import search_ticker_by_name
