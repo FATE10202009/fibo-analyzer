@@ -137,6 +137,22 @@ st.markdown("""
 FAVORITES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "favorites_web.json")
 
 def load_favorites():
+    # 1. URL 쿼리 파라미터에서 먼저 즐겨찾기 복원 시도
+    if "favs" in st.query_params:
+        try:
+            favs_raw = st.query_params["favs"]
+            if favs_raw:
+                parsed = []
+                for item in favs_raw.split("|"):
+                    if ":" in item:
+                        name, ticker = item.split(":", 1)
+                        parsed.append((name.strip().upper(), ticker.strip().upper()))
+                if parsed:
+                    return parsed
+        except Exception as e:
+            print(f"[Query Params Load Error] {e}")
+
+    # 2. 쿼리 파라미터에 없으면 서버의 로컬 파일에서 시도
     favs = []
     if os.path.exists(FAVORITES_FILE):
         try:
@@ -160,9 +176,15 @@ def load_favorites():
     return cleaned_favs
 
 def save_favorites(favs):
-    # [2번 방식] 서버 파일에 저장하지 않고, 사용자 개별 브라우저 세션(st.session_state)에서만
-    # 독립적으로 즐겨찾기를 사용하게 하기 위해 파일 저장을 비활성화합니다.
-    pass
+    # [2번 방식 개량 - URL 쿼리 파라미터 활용]
+    # 다른 사용자에게 영향을 주지 않고, 서버가 재배포(업로드)로 리셋되어도 내 즐겨찾기가 유지되도록
+    # 브라우저 URL의 쿼리 파라미터(st.query_params)에 즐겨찾기를 저장합니다.
+    try:
+        favs_str = "|".join([f"{name}:{ticker}" for name, ticker in favs])
+        st.query_params["favs"] = favs_str
+    except Exception as e:
+        print(f"[Query Params Save Error] {e}")
+
 
 # AI 추천 자산 정의
 AI_RECOMMENDED = [
@@ -475,9 +497,21 @@ with st.sidebar:
             
     if st.button("즐겨찾기 전체 초기화"):
         if os.path.exists(FAVORITES_FILE):
-            os.remove(FAVORITES_FILE)
-        st.session_state.favorites = load_favorites()
-        save_favorites(st.session_state.favorites)
+            try:
+                os.remove(FAVORITES_FILE)
+            except:
+                pass
+        if "favs" in st.query_params:
+            try:
+                del st.query_params["favs"]
+            except:
+                pass
+        st.session_state.favorites = [
+            ("BTC", "BTC-USD"),
+            ("XRP", "XRP-USD"),
+            ("OTLK", "OTLK"),
+            ("SMR", "SMR")
+        ]
         get_marquee_prices.clear()
         st.success("즐겨찾기가 복구되었습니다.")
         st.rerun()
