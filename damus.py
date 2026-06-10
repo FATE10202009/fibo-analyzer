@@ -538,6 +538,7 @@ def generate_damus_chart(data):
             title_text="가격"
         )
     )
+    return fig
 
 
 # ─────────────────────────────────────────────────────────────────
