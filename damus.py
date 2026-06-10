@@ -5,11 +5,8 @@ damus.py — 피보나치 알고리즘 전용 모듈
 """
 import yfinance as yf
 import pandas as pd
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-from analysis import fmt_chart_val, style_axes_dark, fmt_price
+import plotly.graph_objects as go
+from analysis import fmt_chart_val, fmt_price
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -280,14 +277,21 @@ def get_damus_data(ticker, is_usd, interval='1h'):
 # ─────────────────────────────────────────────────────────────────
 def generate_damus_chart(data):
     """
-    피보나치 데이터 기반 간격별 차트 생성.
+    피보나치 데이터 기반 간격별 차트를 Plotly 인터랙티브 차트로 생성.
     """
     if not data:
-        fig = plt.figure(figsize=(10, 5), facecolor='#1E1E1E')
-        ax = fig.add_subplot(111)
-        style_axes_dark(ax)
-        ax.text(0.5, 0.5, "피보나치 데이터 없음", color='#EF5350',
-                ha='center', va='center', fontsize=12)
+        fig = go.Figure()
+        fig.add_annotation(
+            text="피보나치 데이터 없음",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=14, color="#EF5350")
+        )
+        fig.update_layout(
+            template="plotly_dark",
+            plot_bgcolor='#13131A',
+            paper_bgcolor='#0F0F12'
+        )
         return fig
 
     df_today_1h    = data['df_today_1h']
@@ -315,10 +319,9 @@ def generate_damus_chart(data):
         last_candle_time = df_plot.index[-1] + pd.Timedelta(hours=2)
     end_time = min(last_candle_time, session_end)
 
-    fig = plt.figure(figsize=(10, 5), facecolor='#1E1E1E', constrained_layout=True)
-    ax  = fig.add_subplot(111)
+    fig = go.Figure()
 
-    # ── 가격 라인 ────────────────────────────────────────────────
+    # 1. 주 가격 선 추가
     intv_label = {
         '1d': '1D',
         '1h': '1H',
@@ -326,87 +329,188 @@ def generate_damus_chart(data):
         '5m': '5M'
     }.get(interval, interval.upper())
 
-    ax.plot(df_plot.index, df_plot['Close'],
-            color='#E0E0E0', linewidth=1.5, marker='o', markersize=3, label=f'Price ({intv_label})')
+    fig.add_trace(
+        go.Scatter(
+            x=df_plot.index,
+            y=df_plot['Close'],
+            mode='lines+markers',
+            line=dict(color='#E2E8F0', width=1.5),
+            marker=dict(size=4, color='#60A5FA'),
+            name=f"가격 ({intv_label})"
+        )
+    )
 
-    # ── SOP (감자) ───────────────────────────────────────────────
+    # 2. SOP (감자) 수평선 추가
     active_sops = data.get('active_sops', [])
     if active_sops:
         for idx, (t, s_val) in enumerate(active_sops):
-            lbl = f'🥔 SOP {fmt_chart_val(s_val, is_usd)}' if idx == 0 else ""
-            ax.axhline(y=s_val, color='#00E676', linestyle='--', linewidth=1.4, alpha=0.8,
-                       label=lbl)
-            # 차트 상에 생성 시간을 표시하여 구분하기 쉽게 함
-            time_str = t.strftime('%H:%M')
-            ax.text(start_time, s_val, f" 🥔 SOP ({time_str})", color='#00E676', fontsize=7, va='bottom', alpha=0.8)
+            lbl = f"SOP ({t.strftime('%H:%M')})"
+            fig.add_hline(
+                y=s_val,
+                line_dash="dash",
+                line_color="#00E676",
+                line_width=1.2,
+                opacity=0.8,
+                annotation_text=f" {lbl} ({fmt_chart_val(s_val, is_usd)})",
+                annotation_position="left",
+                annotation_font_color="#00E676",
+                annotation_font_size=9
+            )
     else:
-        # 미체크 SOP가 없을 경우 기본 폴백 표시
-        ax.axhline(y=sop, color='#00E676', linestyle='--', linewidth=1.4, alpha=0.5,
-                   label=f'🥔 SOP(기본) {fmt_chart_val(sop, is_usd)}')
+        fig.add_hline(
+            y=sop,
+            line_dash="dash",
+            line_color="#00E676",
+            line_width=1.2,
+            opacity=0.5,
+            annotation_text=f" SOP (기본) ({fmt_chart_val(sop, is_usd)})",
+            annotation_position="left",
+            annotation_font_color="#00E676",
+            annotation_font_size=9
+        )
 
-    # ── Y7/Y2 (전일 고/저) ───────────────────────────────────────
-    ax.axhline(y=y7, color='#FFA726', linestyle=':', linewidth=1.0, alpha=0.8,
-               label=f'Y7 전일고 {fmt_chart_val(y7, is_usd)}')
-    ax.axhline(y=y2, color='#29B6F6', linestyle=':', linewidth=1.0, alpha=0.8,
-               label=f'Y2 전일저 {fmt_chart_val(y2, is_usd)}')
+    # 3. Y7/Y2 (전일 고/저)
+    fig.add_hline(
+        y=y7,
+        line_dash="dot",
+        line_color="#FFA726",
+        line_width=1.0,
+        opacity=0.8,
+        annotation_text=f" Y7 전일고 ({fmt_chart_val(y7, is_usd)})",
+        annotation_position="right",
+        annotation_font_color="#FFA726",
+        annotation_font_size=8
+    )
+    fig.add_hline(
+        y=y2,
+        line_dash="dot",
+        line_color="#2979FF",
+        line_width=1.0,
+        opacity=0.8,
+        annotation_text=f" Y2 전일저 ({fmt_chart_val(y2, is_usd)})",
+        annotation_position="right",
+        annotation_font_color="#2979FF",
+        annotation_font_size=8
+    )
 
-    # ── R7/R2 (지역 피벗 고/저) ──────────────────────────────────
-    ax.axhline(y=r7, color='#CE93D8', linestyle='-.', linewidth=0.9, alpha=0.75,
-               label=f'R7 실시간고점 {fmt_chart_val(r7, is_usd)}')
-    ax.axhline(y=r2, color='#80DEEA', linestyle='-.', linewidth=0.9, alpha=0.75,
-               label=f'R2 실시간저점 {fmt_chart_val(r2, is_usd)}')
+    # 4. R7/R2 (지역 피벗 고/저)
+    fig.add_hline(
+        y=r7,
+        line_dash="dashdot",
+        line_color="#CE93D8",
+        line_width=0.9,
+        opacity=0.75,
+        annotation_text=f" R7 실시간고점 ({fmt_chart_val(r7, is_usd)})",
+        annotation_position="right",
+        annotation_font_color="#CE93D8",
+        annotation_font_size=8
+    )
+    fig.add_hline(
+        y=r2,
+        line_dash="dashdot",
+        line_color="#80DEEA",
+        line_width=0.9,
+        opacity=0.75,
+        annotation_text=f" R2 실시간저점 ({fmt_chart_val(r2, is_usd)})",
+        annotation_position="right",
+        annotation_font_color="#80DEEA",
+        annotation_font_size=8
+    )
 
-    # ── 피보나치 (6번/3번 자리 및 레드존/블루존 영역 채우기) ────
-    # 6번, 3번 자리는 오늘의 고가(t7)와 저가(t2) 기준
+    # 5. 피보나치 (오늘 6번/3번 지지선)
     if t7 is not None and t2 is not None and t7 > t2:
         t_diff = t7 - t2
-        fib_618 = t2 + t_diff * 0.618  # 오늘 기준 6번 자리
-        fib_382 = t2 + t_diff * 0.382  # 오늘 기준 3번 자리
+        fib_618 = t2 + t_diff * 0.618
+        fib_382 = t2 + t_diff * 0.382
         
-        # 6번 자리 (오늘 61.8%) 선
-        ax.axhline(y=fib_618, color='#FFD700', linestyle='-', linewidth=1.2, alpha=0.85,
-                   label=f'6번(오늘 61.8%) {fmt_chart_val(fib_618, is_usd)}')
-        # 3번 자리 (오늘 38.2%) 선
-        ax.axhline(y=fib_382, color='#BA55D3', linestyle='-', linewidth=1.2, alpha=0.85,
-                   label=f'3번(오늘 38.2%) {fmt_chart_val(fib_382, is_usd)}')
+        fig.add_hline(
+            y=fib_618,
+            line_color="#FFD700",
+            line_width=1.2,
+            opacity=0.85,
+            annotation_text=f" 6번 (오늘 61.8%) ({fmt_chart_val(fib_618, is_usd)})",
+            annotation_position="left",
+            annotation_font_color="#FFD700",
+            annotation_font_size=9
+        )
+        fig.add_hline(
+            y=fib_382,
+            line_color="#BA55D3",
+            line_width=1.2,
+            opacity=0.85,
+            annotation_text=f" 3번 (오늘 38.2%) ({fmt_chart_val(fib_382, is_usd)})",
+            annotation_position="left",
+            annotation_font_color="#BA55D3",
+            annotation_font_size=9
+        )
 
-    # 레드존과 블루존은 어제 고가(y7)와 저가(y2) 기준 (y1~y2 & y7~y8)
+    # 6. 레드존/블루존 (어제 y1~y2, y7~y8) 채우기
     if y7 is not None and y2 is not None and y7 > y2:
         y_diff = y7 - y2
-        red_low = y2 + y_diff * 0.146   # y1
-        red_high = y2 + y_diff * 0.236  # y2
-        blue_low = y2 + y_diff * 0.764  # y7
-        blue_high = y2 + y_diff * 0.854 # y8
+        red_low = y2 + y_diff * 0.146
+        red_high = y2 + y_diff * 0.236
+        blue_low = y2 + y_diff * 0.764
+        blue_high = y2 + y_diff * 0.854
         
-        # 레드존 영역 표시 (어제 y1~y2)
-        ax.axhspan(red_low, red_high, color='#FF5252', alpha=0.15,
-                   label='🟥 레드존 최후지지 (어제 y1-y2)')
-        # 블루존 영역 표시 (어제 y7~y8)
-        ax.axhspan(blue_low, blue_high, color='#2979FF', alpha=0.15,
-                   label='🟦 블루존 핵심저항 (어제 y7-y8)')
+        fig.add_hrect(
+            y0=red_low, y1=red_high,
+            fillcolor="#FF5252", opacity=0.15,
+            line_width=0,
+            annotation_text="🟥 레드존 최후지지 (어제 y1-y2)",
+            annotation_position="bottom left",
+            annotation_font_color="#FF5252",
+            annotation_font_size=8
+        )
+        fig.add_hrect(
+            y0=blue_low, y1=blue_high,
+            fillcolor="#2979FF", opacity=0.15,
+            line_width=0,
+            annotation_text="🟦 블루존 핵심저항 (어제 y7-y8)",
+            annotation_position="top left",
+            annotation_font_color="#2979FF",
+            annotation_font_size=8
+        )
 
-    # ── 오늘 숙제 라인 ───────────────────────────────────────────
+    # 7. 오늘 숙제 라인
     for hw_name, hw_price, hw_dir in homework:
-        color = '#EF5350' if hw_dir == 'up' else '#42A5F5'
-        label_txt = f"🔔 오늘숙제 ({'Y8 - 전일고점돌파 미완' if hw_dir == 'up' else 'Y1 - 전일저점이탈 미완'}) {fmt_chart_val(hw_price, is_usd)}"
-        ax.axhline(y=hw_price, color=color, linestyle='-', linewidth=2.0, alpha=0.95, label=label_txt)
-        ax.text(start_time, hw_price,
-                f" 🔔 숙제: {hw_name}",
-                color=color, fontsize=8, va='bottom', fontweight='bold')
+        color = '#EF5350' if hw_dir == 'up' else '#2979FF'
+        fig.add_hline(
+            y=hw_price,
+            line_color=color,
+            line_width=1.8,
+            opacity=0.95,
+            annotation_text=f" 🔔 숙제: {hw_name.split(' ')[0]} ({fmt_chart_val(hw_price, is_usd)})",
+            annotation_position="left",
+            annotation_font_color=color,
+            annotation_font_size=9
+        )
 
-    # ── 이월 숙제 라인 ───────────────────────────────────────────
+    # 8. 이월 숙제 라인
     for hw_name, hw_price, hw_dir in carried_hw:
         color = '#FF8A65' if hw_dir == 'up' else '#80CBC4'
-        label_txt = f"📌 이월숙제 ({'Y8 - 전전일고점 미완' if hw_dir == 'up' else 'Y1 - 전전일저점 미완'}) {fmt_chart_val(hw_price, is_usd)}"
-        ax.axhline(y=hw_price, color=color, linestyle='--', linewidth=1.5, alpha=0.8, label=label_txt)
-        ax.text(start_time, hw_price,
-                f" 📌 {hw_name}",
-                color=color, fontsize=7, va='top', style='italic')
+        fig.add_hline(
+            y=hw_price,
+            line_dash="dash",
+            line_color=color,
+            line_width=1.3,
+            opacity=0.8,
+            annotation_text=f" 📌 {hw_name.split(' ')[0]} ({fmt_chart_val(hw_price, is_usd)})",
+            annotation_position="left",
+            annotation_font_color=color,
+            annotation_font_size=8
+        )
 
-    # ── 현재가 표시 ──────────────────────────────────────────────
-    ax.axhline(y=cp, color='#FFEE58', linestyle='-', linewidth=0.8, alpha=0.5)
-    ax.text(df_plot.index[-1], cp, f"  ▶ 현재 {fmt_chart_val(cp, is_usd)}",
-            color='#FFEE58', fontsize=8, va='center')
+    # 9. 현재가 라인
+    fig.add_hline(
+        y=cp,
+        line_color="#FFEE58",
+        line_width=0.8,
+        opacity=0.7,
+        annotation_text=f" ▶ 현재 ({fmt_chart_val(cp, is_usd)})",
+        annotation_position="right",
+        annotation_font_color="#FFEE58",
+        annotation_font_size=8
+    )
 
     title_label = {
         '1d': '일봉',
@@ -415,44 +519,25 @@ def generate_damus_chart(data):
         '5m': '5분봉'
     }.get(interval, '1시간봉')
 
-    ax.set_title(f'📊 피보나치 알고리즘 — 당일 시황 (SOP · R2/R7 · 숙제) [{title_label}]',
-                 fontsize=10, color='#FFFFFF')
-    ax.legend(loc='upper left', fontsize=7,
-              facecolor='#121212', edgecolor='#333333', labelcolor='#FFFFFF')
-    style_axes_dark(ax)
-
-    # ── X축: 당일 개장 ~ 마지막 데이터+여유, KST(UTC) 이중 표시 ──
-    ax.set_xlim([start_time, end_time])
-    
-    if interval == '1d':
-        ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, len(df_plot) // 8)))
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d'))
-        fig.autofmt_xdate(rotation=45)
-        ax.set_xlabel("날짜 (Date)", fontsize=7, color='#9E9E9E', labelpad=2)
-    else:
-        total_hours = (end_time - start_time).total_seconds() / 3600
-        tick_interval = 1 if total_hours <= 8 else (2 if total_hours <= 16 else 4)
-        ax.xaxis.set_major_locator(mdates.HourLocator(interval=tick_interval))
-
-        # KST(UTC+9) 와 UTC 동시 표시: "19(10)" 형태
-        import matplotlib.ticker as mticker
-        import datetime as dt
-
-        def fmt_kst_utc(x, pos=None):
-            try:
-                utc_dt = mdates.num2date(x)             # matplotlib 숫자 → UTC datetime
-                kst_hour = (utc_dt.hour + 9) % 24       # KST = UTC + 9
-                utc_hour = utc_dt.hour
-                return f"{kst_hour:02d}({utc_hour:02d})"
-            except Exception:
-                return ""
-
-        ax.xaxis.set_major_formatter(mticker.FuncFormatter(fmt_kst_utc))
-        fig.autofmt_xdate(rotation=45)
-        # X축 레이블 제목 추가 (KST(UTC) 안내)
-        ax.set_xlabel("KST(UTC)", fontsize=7, color='#9E9E9E', labelpad=2)
-
-    return fig
+    fig.update_layout(
+        title=dict(
+            text=f"📊 피보나치 알고리즘 — 당일 시황 (SOP · R2/R7 · 숙제) [{title_label}]",
+            font=dict(size=13, color='#FFFFFF')
+        ),
+        template="plotly_dark",
+        plot_bgcolor='#13131A',
+        paper_bgcolor='#0F0F12',
+        margin=dict(l=20, r=40, t=40, b=20),
+        hovermode="x unified",
+        xaxis=dict(
+            gridcolor='#22222A',
+            range=[start_time, end_time]
+        ),
+        yaxis=dict(
+            gridcolor='#22222A',
+            title_text="가격"
+        )
+    )
 
 
 # ─────────────────────────────────────────────────────────────────

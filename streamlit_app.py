@@ -1302,7 +1302,7 @@ with main_container:
             if results['damus_data']:
                 from damus import generate_damus_chart
                 fig_damus = generate_damus_chart(results['damus_data'])
-                st.pyplot(fig_damus)
+                st.plotly_chart(fig_damus, use_container_width=True, key="plotly_chart_damus_alg")
             else:
                 st.info("Damus 데이터를 생성할 수 없습니다.")
 
