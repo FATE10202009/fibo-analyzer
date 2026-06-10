@@ -349,9 +349,15 @@ class AlertManager:
             success, err = send_telegram_message(token, chat_id, msg)
             if success:
                 self._damus_cooldown[cooldown_key] = now
-                print(f"[Fibo Notifier] {ticker} {label} 알림 발송 성공")
+                try:
+                    print(f"[Fibo Notifier] {ticker} {label} 알림 발송 성공")
+                except Exception:
+                    print(f"[Fibo Notifier] {ticker} 알림 발송 성공 (콘솔 출력 인코딩 우회)")
             else:
-                print(f"[Fibo Notifier] 발송 실패: {err}")
+                try:
+                    print(f"[Fibo Notifier] 발송 실패: {err}")
+                except Exception:
+                    print("[Fibo Notifier] 발송 실패 (콘솔 출력 인코딩 우회)")
 
 
 # 싱글톤 인스턴스
