@@ -76,6 +76,245 @@ components.html(
         
         // 부모 창의 body에 notranslate 클래스 추가
         window.parent.document.body.classList.add('notranslate');
+
+        // ────────────────────────────────────────────────────────────
+        // 💸 모바일/터치용 가상 키보드 주입 (On-Screen Virtual Keyboard)
+        // ────────────────────────────────────────────────────────────
+        const doc = window.parent.document;
+        
+        // 1. 키보드 CSS 스타일 시트 생성 및 head에 추가
+        if (!doc.getElementById('virtual-keyboard-style')) {
+            const style = doc.createElement('style');
+            style.id = 'virtual-keyboard-style';
+            style.innerHTML = `
+                #vkey-panel {
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    background: rgba(15, 15, 20, 0.96);
+                    backdrop-filter: blur(20px);
+                    -webkit-backdrop-filter: blur(20px);
+                    border-top: 1px solid rgba(255, 255, 255, 0.12);
+                    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7);
+                    z-index: 999999;
+                    padding: 12px 8px 22px 8px;
+                    transition: transform 0.3s cubic-bezier(0.1, 0.76, 0.55, 0.94), opacity 0.3s ease;
+                    transform: translateY(100%);
+                    opacity: 0;
+                    pointer-events: none;
+                    user-select: none;
+                }
+                #vkey-panel.show {
+                    transform: translateY(0);
+                    opacity: 1;
+                    pointer-events: auto;
+                }
+                .vkey-row {
+                    display: flex;
+                    justify-content: center;
+                    margin-bottom: 6px;
+                    gap: 4px;
+                }
+                .vkey-btn {
+                    flex: 1;
+                    max-width: 42px;
+                    height: 40px;
+                    background: rgba(255, 255, 255, 0.08);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    border-radius: 6px;
+                    color: #FFFFFF;
+                    font-size: 15px;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    transition: background 0.1s ease, transform 0.1s ease;
+                }
+                .vkey-btn:active {
+                    background: rgba(96, 165, 250, 0.4);
+                    transform: scale(0.9);
+                }
+                .vkey-btn.special {
+                    background: rgba(255, 255, 255, 0.16);
+                    max-width: 70px;
+                    font-size: 13px;
+                }
+                .vkey-btn.danger {
+                    background: rgba(239, 68, 68, 0.25);
+                    border-color: rgba(239, 68, 68, 0.2);
+                    max-width: 70px;
+                    font-size: 13px;
+                }
+                .vkey-btn.close {
+                    background: rgba(96, 165, 250, 0.2);
+                    border-color: rgba(96, 165, 250, 0.15);
+                    max-width: 70px;
+                    font-size: 13px;
+                    color: #60A5FA;
+                }
+            `;
+            doc.head.appendChild(style);
+        }
+
+        // 2. 키보드 HTML 컨테이너 생성 및 body에 추가
+        let panel = doc.getElementById('vkey-panel');
+        if (!panel) {
+            panel = doc.createElement('div');
+            panel.id = 'vkey-panel';
+            panel.innerHTML = `
+                <!-- 첫 번째 줄: QWERTY 문자 -->
+                <div class="vkey-row">
+                    <div class="vkey-btn" data-key="Q">Q</div>
+                    <div class="vkey-btn" data-key="W">W</div>
+                    <div class="vkey-btn" data-key="E">E</div>
+                    <div class="vkey-btn" data-key="R">R</div>
+                    <div class="vkey-btn" data-key="T">T</div>
+                    <div class="vkey-btn" data-key="Y">Y</div>
+                    <div class="vkey-btn" data-key="U">U</div>
+                    <div class="vkey-btn" data-key="I">I</div>
+                    <div class="vkey-btn" data-key="O">O</div>
+                    <div class="vkey-btn" data-key="P">P</div>
+                </div>
+                <!-- 두 번째 줄: A-L -->
+                <div class="vkey-row">
+                    <div class="vkey-btn" data-key="A">A</div>
+                    <div class="vkey-btn" data-key="S">S</div>
+                    <div class="vkey-btn" data-key="D">D</div>
+                    <div class="vkey-btn" data-key="F">F</div>
+                    <div class="vkey-btn" data-key="G">G</div>
+                    <div class="vkey-btn" data-key="H">H</div>
+                    <div class="vkey-btn" data-key="J">J</div>
+                    <div class="vkey-btn" data-key="K">K</div>
+                    <div class="vkey-btn" data-key="L">L</div>
+                </div>
+                <!-- 세 번째 줄: Z-M 및 특수문자 -->
+                <div class="vkey-row">
+                    <div class="vkey-btn" data-key="Z">Z</div>
+                    <div class="vkey-btn" data-key="X">X</div>
+                    <div class="vkey-btn" data-key="C">C</div>
+                    <div class="vkey-btn" data-key="V">V</div>
+                    <div class="vkey-btn" data-key="B">B</div>
+                    <div class="vkey-btn" data-key="N">N</div>
+                    <div class="vkey-btn" data-key="M">M</div>
+                    <div class="vkey-btn" data-key="-">-</div>
+                    <div class="vkey-btn" data-key=".">.</div>
+                </div>
+                <!-- 네 번째 줄: 숫자 및 기능키 -->
+                <div class="vkey-row">
+                    <div class="vkey-btn" data-key="1">1</div>
+                    <div class="vkey-btn" data-key="2">2</div>
+                    <div class="vkey-btn" data-key="3">3</div>
+                    <div class="vkey-btn" data-key="4">4</div>
+                    <div class="vkey-btn" data-key="5">5</div>
+                    <div class="vkey-btn" data-key="6">6</div>
+                    <div class="vkey-btn" data-key="7">7</div>
+                    <div class="vkey-btn" data-key="8">8</div>
+                    <div class="vkey-btn" data-key="9">9</div>
+                    <div class="vkey-btn" data-key="0">0</div>
+                </div>
+                <!-- 다섯 번째 줄: 기능키들 -->
+                <div class="vkey-row">
+                    <div class="vkey-btn special danger" data-action="clear">Clear</div>
+                    <div class="vkey-btn special" data-action="backspace">←</div>
+                    <div class="vkey-btn special close" data-action="close">Close</div>
+                </div>
+            `;
+            doc.body.appendChild(panel);
+        }
+
+        // 3. React 및 Streamlit 바인딩 및 이벤트 제어 로직
+        let activeInput = null;
+
+        function showKeyboard() {
+            panel.classList.add('show');
+        }
+
+        function hideKeyboard() {
+            panel.classList.remove('show');
+        }
+
+        // 특정 input에 텍스트를 React 바인딩에 맞게 채워 넣는 브릿지 함수
+        function setInputValue(input, val) {
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+            nativeInputValueSetter.call(input, val);
+            const event = new Event('input', { bubbles: true });
+            input.dispatchEvent(event);
+        }
+
+        // 모든 input을 감시하고 포커싱 이벤트 달기
+        function checkAndBindInputs() {
+            const inputs = doc.querySelectorAll('input[type="text"]');
+            inputs.forEach(input => {
+                if (input.dataset.vkeyBound) return;
+                input.dataset.vkeyBound = "true";
+
+                const handleFocus = () => {
+                    activeInput = input;
+                    if (input.value.trim() === "") {
+                        showKeyboard();
+                    } else {
+                        hideKeyboard();
+                    }
+                };
+
+                input.addEventListener('focus', handleFocus);
+                input.addEventListener('click', handleFocus);
+                input.addEventListener('input', () => {
+                    activeInput = input;
+                    if (input.value.trim() === "") {
+                        showKeyboard();
+                    } else {
+                        hideKeyboard();
+                    }
+                });
+            });
+        }
+
+        // 1초마다 동적으로 새로 렌더링되는 input을 찾아 감시
+        setInterval(checkAndBindInputs, 1000);
+        checkAndBindInputs();
+
+        // 키보드 외부 및 입력창 외부 영역 클릭 시 키보드 닫기
+        doc.addEventListener('click', (e) => {
+            if (activeInput && !activeInput.contains(e.target) && !panel.contains(e.target)) {
+                hideKeyboard();
+                activeInput = null;
+            }
+        });
+
+        // 자판 버튼 클릭 이벤트 리스너
+        panel.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+        });
+
+        panel.addEventListener('click', (e) => {
+            const btn = e.target.closest('.vkey-btn');
+            if (!btn || !activeInput) return;
+
+            const key = btn.dataset.key;
+            const action = btn.dataset.action;
+
+            if (key) {
+                setInputValue(activeInput, activeInput.value + key);
+            } else if (action === 'clear') {
+                setInputValue(activeInput, "");
+                showKeyboard();
+            } else if (action === 'backspace') {
+                const curVal = activeInput.value;
+                if (curVal.length > 0) {
+                    setInputValue(activeInput, curVal.substring(0, curVal.length - 1));
+                }
+                if (activeInput.value.trim() === "") {
+                    showKeyboard();
+                }
+            } else if (action === 'close') {
+                hideKeyboard();
+                activeInput.blur();
+                activeInput = null;
+            }
+        });
     </script>
     """,
     height=0
