@@ -89,18 +89,19 @@ components.html(
             style.innerHTML = `
                 #vkey-panel {
                     position: fixed;
-                    bottom: 0;
-                    left: 0;
-                    right: 0;
-                    background: rgba(15, 15, 20, 0.96);
-                    backdrop-filter: blur(20px);
-                    -webkit-backdrop-filter: blur(20px);
-                    border-top: 1px solid rgba(255, 255, 255, 0.12);
-                    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7);
+                    bottom: 16px;
+                    right: 16px;
+                    width: 360px;
+                    background: rgba(15, 15, 22, 0.97);
+                    backdrop-filter: blur(24px);
+                    -webkit-backdrop-filter: blur(24px);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 16px;
+                    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.8);
                     z-index: 999999;
-                    padding: 12px 8px 22px 8px;
+                    padding: 10px 8px 12px 8px;
                     transition: transform 0.3s cubic-bezier(0.1, 0.76, 0.55, 0.94), opacity 0.3s ease;
-                    transform: translateY(100%);
+                    transform: translateY(calc(100% + 24px));
                     opacity: 0;
                     pointer-events: none;
                     user-select: none;
@@ -113,18 +114,18 @@ components.html(
                 .vkey-row {
                     display: flex;
                     justify-content: center;
-                    margin-bottom: 6px;
-                    gap: 4px;
+                    margin-bottom: 4px;
+                    gap: 3px;
                 }
                 .vkey-btn {
                     flex: 1;
-                    max-width: 42px;
-                    height: 40px;
+                    max-width: 32px;
+                    height: 32px;
                     background: rgba(255, 255, 255, 0.08);
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    border-radius: 6px;
+                    border: 1px solid rgba(255, 255, 255, 0.06);
+                    border-radius: 5px;
                     color: #FFFFFF;
-                    font-size: 15px;
+                    font-size: 12px;
                     font-weight: 600;
                     display: flex;
                     align-items: center;
@@ -134,24 +135,32 @@ components.html(
                 }
                 .vkey-btn:active {
                     background: rgba(96, 165, 250, 0.4);
-                    transform: scale(0.9);
+                    transform: scale(0.88);
                 }
                 .vkey-btn.special {
-                    background: rgba(255, 255, 255, 0.16);
-                    max-width: 70px;
-                    font-size: 13px;
+                    background: rgba(255, 255, 255, 0.14);
+                    max-width: 56px;
+                    font-size: 11px;
                 }
                 .vkey-btn.danger {
-                    background: rgba(239, 68, 68, 0.25);
+                    background: rgba(239, 68, 68, 0.22);
                     border-color: rgba(239, 68, 68, 0.2);
+                    max-width: 56px;
+                    font-size: 11px;
+                }
+                .vkey-btn.enter {
+                    background: rgba(52, 211, 153, 0.22);
+                    border-color: rgba(52, 211, 153, 0.25);
                     max-width: 70px;
-                    font-size: 13px;
+                    font-size: 11px;
+                    color: #34D399;
+                    font-weight: 700;
                 }
                 .vkey-btn.close {
-                    background: rgba(96, 165, 250, 0.2);
+                    background: rgba(96, 165, 250, 0.18);
                     border-color: rgba(96, 165, 250, 0.15);
-                    max-width: 70px;
-                    font-size: 13px;
+                    max-width: 56px;
+                    font-size: 11px;
                     color: #60A5FA;
                 }
             `;
@@ -370,11 +379,12 @@ components.html(
             htmlContent += `
                 <div class="vkey-row">
                     <div class="vkey-btn special danger" data-action="clear">Clear</div>
-                    <div class="vkey-btn special" data-action="shift" style="${shiftActiveStyle}">Shift</div>
-                    <div class="vkey-btn special" data-action="space" style="flex: 2; max-width: 140px;">Space</div>
-                    <div class="vkey-btn special" data-action="backspace">←</div>
-                    <div class="vkey-btn special" data-action="lang" style="color: #FBBF24;">${currentLang === 'EN' ? '한글' : 'English'}</div>
-                    <div class="vkey-btn special close" data-action="close">Close</div>
+                    <div class="vkey-btn special" data-action="shift" style="${shiftActiveStyle}">⇧</div>
+                    <div class="vkey-btn special" data-action="space" style="flex: 3; max-width: 120px; font-size:10px;">Space</div>
+                    <div class="vkey-btn special" data-action="backspace">⌫</div>
+                    <div class="vkey-btn enter" data-action="enter">↵ Enter</div>
+                    <div class="vkey-btn special" data-action="lang" style="color: #FBBF24; max-width:52px;">${currentLang === 'EN' ? '한글' : 'ENG'}</div>
+                    <div class="vkey-btn special close" data-action="close">✕</div>
                 </div>
             `;
             panel.innerHTML = htmlContent;
@@ -484,6 +494,19 @@ components.html(
             } else if (action === 'shift') {
                 isShift = !isShift;
                 renderKeyboard();
+            } else if (action === 'enter') {
+                // Enter 키: 현재 입력값으로 검색 제출 (Enter 키 이벤트 강제 발생)
+                hangulBuffer = [];
+                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true });
+                activeInput.dispatchEvent(enterEvent);
+                const enterUpEvent = new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true });
+                activeInput.dispatchEvent(enterUpEvent);
+                // Streamlit의 form submit 버튼도 찾아서 클릭 시도
+                const submitBtn = doc.querySelector('button[kind="primaryFormSubmit"], button[data-testid="baseButton-primaryFormSubmit"]');
+                if (submitBtn) submitBtn.click();
+                hideKeyboard();
+                activeInput.blur();
+                activeInput = null;
             } else if (action === 'lang') {
                 currentLang = currentLang === 'EN' ? 'KO' : 'EN';
                 isShift = false;
