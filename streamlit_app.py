@@ -140,6 +140,7 @@ st.markdown("""
 
 # 즐겨찾기 파일 경로 설정
 FAVORITES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "favorites_web.json")
+LAST_USER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_virtual_user.txt")
 
 def load_favorites():
     # 1. URL 쿼리 파라미터에서 먼저 즐겨찾기 복원 시도
@@ -189,6 +190,13 @@ def save_favorites(favs):
         st.query_params["favs"] = favs_str
     except Exception as e:
         print(f"[Query Params Save Error] {e}")
+    
+    # 로컬 파일에도 동시에 저장하여 브라우저 재접속(URL 파라미터 없음) 시 복구되도록 합니다.
+    try:
+        with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
+            json.dump(favs, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"[Favorites File Save Error] {e}")
 
 
 # AI 추천 자산 정의
@@ -307,7 +315,17 @@ if "virtual_user_id" not in st.session_state:
     if "user" in st.query_params:
         st.session_state.virtual_user_id = st.query_params["user"]
     else:
-        st.session_state.virtual_user_id = "guest"
+        # 로컬 파일에서 마지막으로 사용된 닉네임 로드 시도
+        last_user = "guest"
+        if os.path.exists(LAST_USER_FILE):
+            try:
+                with open(LAST_USER_FILE, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        last_user = content
+            except:
+                pass
+        st.session_state.virtual_user_id = last_user
 
 
 # ────────────────────────────────────────────────────────────
@@ -790,6 +808,9 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
     # MultiIndex 대응 컬럼 평탄화
     if df_all.columns.nlevels > 1:
         df_all.columns = df_all.columns.droplevel(1)
+
+    # 결측치(NaN)가 포함된 행 제거 (주로 불완전한 당일 거래일 데이터 유입 방지)
+    df_all = df_all.dropna(subset=['Close', 'High', 'Low', 'Open'])
 
     # 통화 판단
     is_usd = True
@@ -1327,6 +1348,12 @@ with main_container:
             if user_id_input != st.session_state.virtual_user_id:
                 st.session_state.virtual_user_id = user_id_input
                 st.query_params["user"] = user_id_input
+                # 로컬 파일에 마지막 닉네임 저장
+                try:
+                    with open(LAST_USER_FILE, "w", encoding="utf-8") as f:
+                        f.write(user_id_input)
+                except Exception as e:
+                    print(f"[Last User Save Error] {e}")
                 st.rerun()
 
             trading_user_id = st.session_state.virtual_user_id
