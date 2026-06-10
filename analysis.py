@@ -193,15 +193,73 @@ def score_to_label(score):
         return "🔴 강한 매도 / 하락 경계 (Caution)"
 
 def make_fib_markdown_table(levels_dict, current_price, rate, is_usd):
-    rows = []
+    """피보나치 레벨을 한눈에 보기 좋은 HTML 컬러 카드 테이블로 렌더링합니다."""
+
+    # 레벨별 색상/아이콘 맵핑
+    LEVEL_STYLES = {
+        '2.618': ('🚀', '#E040FB', 'rgba(224,64,251,0.10)'),
+        '2.000': ('🎯', '#7C4DFF', 'rgba(124,77,255,0.10)'),
+        '1.618': ('✨', '#448AFF', 'rgba(68,138,255,0.10)'),
+        '1.414': ('📌', '#00BCD4', 'rgba(0,188,212,0.10)'),
+        '1.272': ('📍', '#4DD0E1', 'rgba(77,208,225,0.10)'),
+        '1.000': ('#FF5252', '#FF5252', 'rgba(255,82,82,0.10)'),  # 고점
+        '0.764': ('↘️', '#FFA726', 'rgba(255,167,38,0.08)'),
+        '0.618': ('🟢', '#66BB6A', 'rgba(102,187,106,0.15)'),
+        '0.500': ('—', '#FFEE58', 'rgba(255,238,88,0.08)'),
+        '0.382': ('🔵', '#BA68C8', 'rgba(186,104,200,0.15)'),
+        '0.236': ('⚠️', '#29B6F6', 'rgba(41,182,246,0.10)'),
+        '0.146': ('🔴', '#E91E63', 'rgba(233,30,99,0.12)'),
+        '0.000': ('📉', '#90A4AE', 'rgba(144,164,174,0.08)'),
+    }
+
+    # 테이블 헤더
+    html = """<div style="overflow-x:auto; margin:8px 0;">
+<table style="width:100%; border-collapse:collapse; font-size:13px; font-family:'Outfit','Noto Sans KR',sans-serif;">
+  <thead>
+    <tr style="background:rgba(255,255,255,0.05); border-bottom:1px solid rgba(255,255,255,0.15);">
+      <th style="padding:7px 10px; text-align:left; color:#94A3B8; font-weight:600; width:6%;">레벨</th>
+      <th style="padding:7px 10px; text-align:left; color:#94A3B8; font-weight:600; width:22%;">구분</th>
+      <th style="padding:7px 10px; text-align:right; color:#94A3B8; font-weight:600; width:40%;">가격</th>
+      <th style="padding:7px 10px; text-align:right; color:#94A3B8; font-weight:600; width:14%;">현재가 대비</th>
+      <th style="padding:7px 10px; text-align:center; color:#94A3B8; font-weight:600; width:18%;">방향</th>
+    </tr>
+  </thead>
+  <tbody>"""
+
     for ratio_name, price in levels_dict.items():
         parts = ratio_name.split(' ')
         ratio = parts[0]
         label = " ".join(parts[1:]) if len(parts) > 1 else ""
-        diff_pct = ((current_price / price) - 1) * 100
+        # 괄호 제거해서 보기 좋게
+        label_clean = label.replace('(', '').replace(')', '')
+
+        diff_pct = ((current_price / price) - 1) * 100 if price else 0
         price_str = fmt_price(price, rate, is_usd)
-        rows.append(f"| **{ratio}** | {label} | {price_str} | {diff_pct:+.2f}% |")
-    return "\n".join(rows)
+
+        icon, accent, bg = LEVEL_STYLES.get(ratio, ('•', '#94A3B8', 'rgba(255,255,255,0.03)'))
+
+        # 방향 배지
+        if diff_pct > 0.5:
+            dir_badge = f"<span style='background:rgba(102,187,106,0.2);color:#66BB6A;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;'>▲ 위 {diff_pct:+.1f}%</span>"
+        elif diff_pct < -0.5:
+            dir_badge = f"<span style='background:rgba(255,82,82,0.2);color:#FF5252;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;'>▼ 아래 {abs(diff_pct):.1f}%</span>"
+        else:
+            dir_badge = f"<span style='background:rgba(255,238,88,0.2);color:#FFEE58;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;'>≈ 현재가</span>"
+
+        # 현재가 대비 색상
+        diff_color = '#66BB6A' if diff_pct > 0 else '#FF5252' if diff_pct < 0 else '#FFEE58'
+
+        html += f"""
+    <tr style="background:{bg}; border-bottom:1px solid rgba(255,255,255,0.05);">
+      <td style="padding:8px 10px; color:{accent}; font-weight:700; font-size:12px;">{ratio}</td>
+      <td style="padding:8px 10px; color:#CBD5E1;">{label_clean}</td>
+      <td style="padding:8px 10px; text-align:right; color:#E2E8F0; font-weight:600; font-size:13px;">{price_str}</td>
+      <td style="padding:8px 10px; text-align:right; color:{diff_color}; font-weight:700;">{diff_pct:+.2f}%</td>
+      <td style="padding:8px 10px; text-align:center;">{dir_badge}</td>
+    </tr>"""
+
+    html += "\n  </tbody>\n</table>\n</div>"
+    return html
 
 # Matplotlib 다크 모드 스타일링
 def style_axes_dark(ax):
