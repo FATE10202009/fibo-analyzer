@@ -83,6 +83,28 @@ def get_entry_signal(price, levels, rsi):
     else:
         return "분할 매수 대기 (주요 지지선 상회)"
 
+def get_t_signal(current_price, t_levels, current_rsi):
+    # 어제자 피보나치 레벨 돌파/지지 여부 판단
+    t_high = t_levels['1.000 (고점)']
+    t_low = t_levels['0.000 (저점)']
+    
+    if current_price > t_high:
+        return "어제 고점 돌파 (상승 돌파 🚀)"
+    elif current_price < t_low:
+        return "어제 저점 이탈 (하락 이탈 📉)"
+    else:
+        t_0618 = t_levels.get('0.618 (첫 주요 지지선)', 0)
+        t_0500 = t_levels.get('0.500 (절반선)', 0)
+        t_0382 = t_levels.get('0.382 (두 번째 지지선)', 0)
+        if current_price >= t_0618:
+            return "어제 0.618선 상회 (강세 유지)"
+        elif current_price >= t_0500:
+            return "어제 0.500선 안착 시도"
+        elif current_price >= t_0382:
+            return "어제 0.382선 지지 시도"
+        else:
+            return "어제 0.382선 하회 (약세)"
+
 def get_adjacent_l_levels(price, l_levels_dict):
     prices = sorted(list(l_levels_dict.values()))
     
@@ -349,11 +371,11 @@ def generate_figures(ticker, df_all, df_m, df_s, l_levels, m_levels, s_levels, x
     figs = {}
 
     # 1) L Size: All-Time — 캔들스틱
-    df_l_plot = df_all.tail(1000).copy()
+    df_l_plot = df_all.copy()
     fig_l = plt.figure(figsize=(10, 5.5), facecolor='#1E1E1E')
     draw_candlestick_with_volume(
         fig_l, df_l_plot,
-        title=f'역사적 대파동 (L Size: All-Time) (최근 1000 캔들)  고점: {fmt_chart_val(l_high, is_usd)} / 저점: {fmt_chart_val(l_low, is_usd)}',
+        title=f'역사적 대파동 (L Size: All-Time)  고점: {fmt_chart_val(l_high, is_usd)}  |  저점: {fmt_chart_val(l_low, is_usd)}',
         fib_levels=l_levels, is_usd=is_usd
     )
     figs['L'] = fig_l
@@ -362,7 +384,7 @@ def generate_figures(ticker, df_all, df_m, df_s, l_levels, m_levels, s_levels, x
     fig_m = plt.figure(figsize=(10, 5.5), facecolor='#1E1E1E')
     draw_candlestick_with_volume(
         fig_m, df_m,
-        title=f'중기 파동 (M Size: Nested in L) (최근 180 캔들)  고점: {fmt_chart_val(m_high, is_usd)} / 저점: {fmt_chart_val(m_low, is_usd)}',
+        title=f'중기 파동 (M Size: Nested in L) (최근 180 캔들)  고점: {fmt_chart_val(m_high, is_usd)}  |  저점: {fmt_chart_val(m_low, is_usd)}',
         fib_levels=m_levels,
         sma_cols=['SMA_5', 'SMA_20'],
         bb_cols=['BB_Upper', 'BB_Lower'],
@@ -374,7 +396,7 @@ def generate_figures(ticker, df_all, df_m, df_s, l_levels, m_levels, s_levels, x
     fig_s = plt.figure(figsize=(10, 5.5), facecolor='#1E1E1E')
     draw_candlestick_with_volume(
         fig_s, df_s,
-        title=f'단기 변곡 (S Size: Nested in M) (최근 30 캔들)  고점: {fmt_chart_val(s_high, is_usd)} / 저점: {fmt_chart_val(s_low, is_usd)}',
+        title=f'단기 변곡 (S Size: Nested in M) (최근 30 캔들)  고점: {fmt_chart_val(s_high, is_usd)}  |  저점: {fmt_chart_val(s_low, is_usd)}',
         fib_levels=s_levels,
         sma_cols=['SMA_5', 'SMA_20'],
         is_usd=is_usd
@@ -386,7 +408,7 @@ def generate_figures(ticker, df_all, df_m, df_s, l_levels, m_levels, s_levels, x
     fig_xs = plt.figure(figsize=(10, 5.5), facecolor='#1E1E1E')
     draw_candlestick_with_volume(
         fig_xs, df_xs_plot,
-        title=f'초단기 극세 (XS Size: Nested in S) (최근 14 캔들)  고점: {fmt_chart_val(xs_high, is_usd)} / 저점: {fmt_chart_val(xs_low, is_usd)}',
+        title=f'초단기 극세 (XS Size: Nested in S) (최근 14 캔들)  고점: {fmt_chart_val(xs_high, is_usd)}  |  저점: {fmt_chart_val(xs_low, is_usd)}',
         fib_levels=xs_levels,
         is_usd=is_usd
     )
@@ -437,7 +459,7 @@ def generate_figures(ticker, df_all, df_m, df_s, l_levels, m_levels, s_levels, x
 
 
 def generate_future_outlook(ticker_name, info, rate):
-    is_coin = ticker_name.endswith("-USD")
+    is_coin = ticker_name.upper().endswith("-USD")
     
     rec = info.get('recommendationKey', 'none')
     target_mean = info.get('targetMeanPrice')
@@ -496,18 +518,19 @@ def format_fundamental_report(ticker_name, info, rate):
     lines.append(f" 🔍 {ticker_name} 기본적 자산 가치 및 장기 전망 리포트")
     lines.append(f"============================================================")
     
-    is_coin = ticker_name.endswith("-USD")
+    ticker_upper = ticker_name.upper()
+    is_coin = ticker_upper.endswith("-USD")
     long_name = info.get('longName') or info.get('shortName') or info.get('name') or ticker_name
     lines.append(f"● 자산 이름: {long_name} ({ticker_name})")
     
     market_cap = info.get('marketCap')
     if market_cap:
-        mcap_str = fmt_large_value(market_cap, rate, is_coin or not (ticker_name.endswith('.KS') or ticker_name.endswith('.KQ')))
+        mcap_str = fmt_large_value(market_cap, rate, is_coin or not (ticker_upper.endswith('.KS') or ticker_upper.endswith('.KQ')))
         lines.append(f"● 시가 총액: {mcap_str}")
     else:
         lines.append(f"● 시가 총액: 정보 없음")
         
-    is_usd = is_coin or not (ticker_name.endswith('.KS') or ticker_name.endswith('.KQ'))
+    is_usd = is_coin or not (ticker_upper.endswith('.KS') or ticker_upper.endswith('.KQ'))
         
     if is_coin:
         lines.append("\n[🪙 코인 핵심 공급량 및 거래 데이터]")
@@ -685,7 +708,7 @@ def generate_news_impact_md(ticker, news_list, api_key=None):
         date_str = pub_date[:10] if len(pub_date) >= 10 else pub_date
         md.append(f"* [{title}]({url}) ({provider} | {date_str})")
         
-    is_coin = ticker.endswith("-USD")
+    is_coin = ticker.upper().endswith("-USD")
     
     # Gemini AI 뉴스 분석 호출 시도
     ai_result = None
@@ -869,7 +892,7 @@ def generate_strategy_and_buy_price_md(
         long_action = "신규 매수 자제, 기존 보유자 이익 실현 전략"
         long_probability = "추가 상승 제한적, 조정 가능성"
 
-    is_coin = ticker.endswith("-USD")
+    is_coin = ticker.upper().endswith("-USD")
 
     md.append(f"### 🔍 장기 시장 방향성 판단\n")
     md.append(f"- **현재 장기 국면**: {long_bias}")

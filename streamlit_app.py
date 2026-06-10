@@ -13,7 +13,7 @@ import streamlit.components.v1 as components
 from search import search_ticker_by_name
 from analysis import (
     fmt_price, fmt_range, fmt_large_value, fmt_chart_val,
-    get_fib_levels, get_entry_signal, get_adjacent_l_levels,
+    get_fib_levels, get_entry_signal, get_t_signal, get_adjacent_l_levels,
     calculate_composite_score, score_to_label, make_fib_markdown_table,
     generate_future_outlook, format_fundamental_report,
     generate_fibonacci_scenario_md, generate_news_impact_md,
@@ -21,6 +21,12 @@ from analysis import (
 )
 from damus import get_damus_data, generate_damus_report_md
 from ai_analyzer import ask_gemini_qna
+from notifier import alert_manager
+import google_finance as gf
+
+# 텔레그램 목표가 모니터링 스레드 가동
+if not alert_manager.running:
+    alert_manager.start_monitor()
 
 # ────────────────────────────────────────────────────────────
 # Page Configuration & Rich CSS Styling
@@ -148,7 +154,7 @@ def load_favorites():
     cleaned_favs = []
     for name, val in favs:
         cleaned_name = name.split(" ")[0].upper()
-        cleaned_favs.append((cleaned_name, val))
+        cleaned_favs.append((cleaned_name, val.upper()))
     return cleaned_favs
 
 def save_favorites(favs):
@@ -156,7 +162,7 @@ def save_favorites(favs):
     cleaned_favs = []
     for name, val in favs:
         cleaned_name = name.split(" ")[0].upper()
-        cleaned_favs.append((cleaned_name, val))
+        cleaned_favs.append((cleaned_name, val.upper()))
     try:
         with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
             json.dump(cleaned_favs, f, ensure_ascii=False, indent=4)
@@ -171,6 +177,82 @@ AI_RECOMMENDED = [
     ("005930 (삼성전자)", "005930.KS", "반도체 턴어라운드 및 역사적 피보나치 바닥권"),
     ("TSLA (테슬라)", "TSLA", "자율주행 및 로보택시 중장기 성장성 부각")
 ]
+
+# ────────────────────────────────────────────────────────────
+# 📊 즐겨찾기 실시간 시세 가로 전광판 데이터 수집 (Marquee)
+# ────────────────────────────────────────────────────────────
+@st.cache_data(ttl=30, show_spinner=False)
+def get_marquee_prices(favorites, data_source="google"):
+    tickers = [f[1] for f in favorites]
+    if not tickers:
+        return "📊 즐겨찾기에 자산을 등록해 주세요."
+    try:
+        # 실시간 적용 환율 조회
+        usd_krw_rate = 1380.0
+        try:
+            if data_source == "google":
+                rate_df = gf.download_google_finance("USDKRW=X")
+                if rate_df.empty:
+                    rate_df = yf.download("USDKRW=X", period="5d", interval="1d", progress=False)
+            else:
+                rate_df = yf.download("USDKRW=X", period="5d", interval="1d", progress=False)
+                
+            if not rate_df.empty:
+                if rate_df.columns.nlevels > 1:
+                    rate_df.columns = rate_df.columns.droplevel(1)
+                rate_df = rate_df.dropna(subset=['Close'])
+                if not rate_df.empty:
+                    usd_krw_rate = float(rate_df['Close'].iloc[-1])
+        except Exception as e:
+            print(f"[Marquee] 환율 로드 실패: {e}")
+
+        # 개별 티커 시세 수집
+        marquee_items = []
+        for name, ticker in favorites:
+            try:
+                df = pd.DataFrame()
+                if data_source == "google":
+                    df = gf.download_google_finance(ticker)
+                    if df.empty:
+                        yf_ticker = ticker
+                        if ":" in ticker:
+                            yf_ticker = ticker.split(":")[0]
+                        df = yf.download(yf_ticker, period="5d", interval="1d", progress=False)
+                else:
+                    yf_ticker = ticker
+                    if ":" in ticker:
+                        yf_ticker = ticker.split(":")[0]
+                    df = yf.download(yf_ticker, period="5d", interval="1d", progress=False)
+                    
+                if df.empty:
+                    continue
+                    
+                if df.columns.nlevels > 1:
+                    df.columns = df.columns.droplevel(1)
+                df = df.dropna(subset=['Close'])
+                
+                if df.empty or len(df) < 2:
+                    continue
+                close_today = float(df['Close'].iloc[-1])
+                close_yesterday = float(df['Close'].iloc[-2])
+                diff = close_today - close_yesterday
+                pct = (diff / close_yesterday) * 100
+                
+                is_usd = not (ticker.upper().endswith('.KS') or ticker.upper().endswith('.KQ'))
+                price_str = fmt_price(close_today, usd_krw_rate, is_usd)
+                
+                if pct >= 0:
+                    item = f"<span style='color:#FF5252; font-weight:bold;'>{name}: {price_str} ▲{pct:.2f}%</span>"
+                else:
+                    item = f"<span style='color:#2979FF; font-weight:bold;'>{name}: {price_str} ▼{abs(pct):.2f}%</span>"
+                marquee_items.append(item)
+            except Exception as ex:
+                print(f"[Marquee Warning] {ticker} 파싱 실패: {ex}")
+        return " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ".join(marquee_items)
+    except Exception as e:
+        print(f"[Marquee Error] 시세 수집 실패: {e}")
+        return "📊 실시간 시세를 수집할 수 없습니다."
+
 
 # ────────────────────────────────────────────────────────────
 # Session State Initialization (React DOM NotFoundError 방지)
@@ -207,17 +289,12 @@ with st.sidebar:
         
     st.subheader("🔍 분석 조건 설정")
     
-    # 즐겨찾기 리스트 (한 줄씩 삭제 기능 ❌ 연동)
+    # 즐겨찾기 리스트
     st.write("⭐ 즐겨찾기 빠른 로드")
     for idx, (name, val) in enumerate(st.session_state.favorites):
-        col1, col2 = st.columns([0.8, 0.2])
         # 자산 변경 클릭 시 세션 상태를 변경하고 리프레시하여 DOM 충돌 방지
-        if col1.button(name, key=f"fav_btn_{idx}_{val}", use_container_width=True):
+        if st.button(name, key=f"fav_btn_{idx}_{val}", use_container_width=True):
             st.session_state.search_ticker = val
-            st.rerun()
-        if col2.button("❌", key=f"fav_del_{idx}_{val}", help=f"{name} 즐겨찾기 삭제"):
-            st.session_state.favorites.pop(idx)
-            save_favorites(st.session_state.favorites)
             st.rerun()
             
     # 티커 직접 검색 입력창 (세션 상태와 단방향 연동)
@@ -239,21 +316,22 @@ with st.sidebar:
         format_func=lambda x: {"all": "전체 시장", "nasdaq": "나스닥 (NASDAQ)", "binance": "바이낸스 (Binance)"}.get(x)
     )
     
-    # 즐겨찾기 추가 편집
-    st.write("---")
-    st.subheader("⭐ 즐겨찾기 신규 등록")
-    new_fav_name = st.text_input("즐겨찾기 추가 이름", placeholder="예: 삼성전자", key="new_fav_name_widget")
-    new_fav_ticker = st.text_input("즐겨찾기 추가 티커", placeholder="예: 005930.KS", key="new_fav_ticker_widget")
+    # 피보나치 중첩 모드 선택
+    nest_mode = st.selectbox(
+        "피보나치 중첩 모드 선택",
+        options=["time", "price"],
+        format_func=lambda x: "시간 주기 기반 (기존)" if x == "time" else "가격 레벨 기반 (수학적 중첩)",
+        help="시간 주기에 따른 최저/최고점을 기준으로 분석할지, 장기 L 레벨 사이에 갇힌 영역을 수학적으로 쪼개어 중첩할지 선택합니다."
+    )
     
-    if st.button("현재 자산 즐겨찾기 추가"):
-        if new_fav_name and new_fav_ticker:
-            if (new_fav_name, new_fav_ticker) not in st.session_state.favorites:
-                st.session_state.favorites.append((new_fav_name, new_fav_ticker))
-                save_favorites(st.session_state.favorites)
-                st.success("즐겨찾기가 추가되었습니다!")
-                st.rerun()
-        else:
-            st.error("이름과 티커를 모두 입력해 주세요.")
+    # 데이터 소스 선택
+    data_source = st.selectbox(
+        "📊 데이터 소스 선택",
+        options=["google", "yahoo"],
+        format_func=lambda x: "Google Finance (권장)" if x == "google" else "Yahoo Finance",
+        help="데이터 수집에 사용할 금융 데이터 소스를 선택합니다."
+    )
+    
 
     # 🤖 AI 추천 자산 섹션 추가
     st.write("---")
@@ -270,6 +348,7 @@ with st.sidebar:
             if col_rec2.button("⭐", key=f"rec_add_{ticker}", help="즐겨찾기에 추가"):
                 st.session_state.favorites.append((name.split(" ")[0], ticker))
                 save_favorites(st.session_state.favorites)
+                get_marquee_prices.clear()
                 st.rerun()
             
     if st.button("즐겨찾기 전체 초기화"):
@@ -277,8 +356,100 @@ with st.sidebar:
             os.remove(FAVORITES_FILE)
         st.session_state.favorites = load_favorites()
         save_favorites(st.session_state.favorites)
+        get_marquee_prices.clear()
         st.success("즐겨찾기가 복구되었습니다.")
         st.rerun()
+
+    # ────────────────────────────────────────────────────────────
+    # 🚨 텔레그램 알림 설정
+    # ────────────────────────────────────────────────────────────
+    st.write("---")
+    with st.expander("🚨 텔레그램 알림 설정"):
+        st.subheader("🔑 텔레그램 연동 설정")
+        curr_token, curr_chat_id = alert_manager.get_token_and_chat_id()
+        
+        tg_token = st.text_input(
+            "텔레그램 봇 토큰",
+            value=curr_token,
+            type="password",
+            placeholder="Bot Token 입력",
+            key="tg_token_input"
+        )
+        tg_chat_id = st.text_input(
+            "텔레그램 Chat ID",
+            value=curr_chat_id,
+            placeholder="Chat ID 입력",
+            key="tg_chat_id_input"
+        )
+        if st.button("연동 설정 저장", key="save_tg_config_btn"):
+            alert_manager.set_telegram_config(tg_token.strip(), tg_chat_id.strip())
+            st.success("텔레그램 연동 설정이 저장되었습니다.")
+            st.rerun()
+            
+        st.write("---")
+        st.subheader("🎯 피보나치 알림 설정")
+        current_ticker = st.session_state.search_ticker
+        
+        # 피보나치 레벨 알림 토글
+        damus_tickers = alert_manager.get_damus_alert_tickers()
+        is_damus_enabled = current_ticker in damus_tickers
+        
+        checked = st.checkbox(
+            f"{current_ticker} 피보나치 레벨 알림 받기",
+            value=is_damus_enabled,
+            key="damus_alert_checkbox"
+        )
+        if checked != is_damus_enabled:
+            alert_manager.set_damus_alert_ticker(current_ticker, checked)
+            if not checked:
+                # 모니터 중인 티커와 같으면 중지
+                if getattr(alert_manager, '_damus_ticker', None) == current_ticker:
+                    alert_manager.stop_damus_monitor()
+            st.success(f"{current_ticker} 피보나치 알림 설정이 변경되었습니다.")
+            st.rerun()
+            
+        st.write("---")
+        st.subheader("🔔 지정가 알림 등록")
+        target_p = st.number_input(
+            "목표 가격",
+            value=0.0,
+            step=0.01,
+            key="alert_target_price_input"
+        )
+        cond = st.selectbox(
+            "돌파 조건",
+            options=["above", "below"],
+            format_func=lambda x: "상향 돌파 (>=)" if x == "above" else "하향 돌파 (<=)",
+            key="alert_condition_select"
+        )
+        if st.button("지정가 알림 추가", key="add_price_alert_btn"):
+            if target_p > 0:
+                alert_manager.add_alert(current_ticker, target_p, cond)
+                st.success(f"{current_ticker} 지정가 {target_p} 알림이 추가되었습니다.")
+                st.rerun()
+            else:
+                st.error("올바른 목표 가격을 입력해 주세요.")
+                
+        st.write("---")
+        st.subheader("📋 현재 등록된 알림 리스트")
+        alerts = alert_manager.get_all_alerts()
+        if not alerts:
+            st.info("등록된 지정가 알림이 없습니다.")
+        else:
+            for a in alerts:
+                # a: {"id": "xxx", "ticker": "xxx", "target_price": xxx, "condition": "xxx", "is_active": True/False}
+                ticker_lbl = a["ticker"]
+                cond_lbl = "▲" if a["condition"] == "above" else "▼"
+                price_lbl = f"{a['target_price']:,.2f}" if not (ticker_lbl.upper().endswith(".KS") or ticker_lbl.upper().endswith(".KQ")) else f"{a['target_price']:,.0f}"
+                active_lbl = "" if a.get("is_active", True) else " (비활성)"
+                
+                col_a, col_b = st.columns([0.85, 0.15])
+                col_a.markdown(f"**{ticker_lbl}** {cond_lbl} {price_lbl}{active_lbl}")
+                if col_b.button("❌", key=f"del_alert_{a['id']}", help="알림 삭제"):
+                    alert_manager.remove_alert(a["id"])
+                    st.success("지정가 알림이 삭제되었습니다.")
+                    st.rerun()
+
 
 # ────────────────────────────────────────────────────────────
 # 자산 전환에 따른 채팅 내역 초기화 (React DOM NotFoundError 방지 핵심)
@@ -288,61 +459,7 @@ if st.session_state.last_analyzed_ticker != st.session_state.search_ticker:
     # 자산 전환 시 채팅 초기화하여 DOM 구조 꼬임 방지
     st.session_state.messages = []
 
-# ────────────────────────────────────────────────────────────
-# 📊 즐겨찾기 실시간 시세 가로 전광판 데이터 수집 (Marquee)
-# ────────────────────────────────────────────────────────────
-@st.cache_data(ttl=30, show_spinner=False)
-def get_marquee_prices(favorites):
-    tickers = [f[1] for f in favorites]
-    if not tickers:
-        return "📊 즐겨찾기에 자산을 등록해 주세요."
-    try:
-        # 실시간 적용 환율 조회
-        usd_krw_rate = 1380.0
-        try:
-            rate_df = yf.download("USDKRW=X", period="5d", interval="1d", progress=False)
-            if not rate_df.empty:
-                if rate_df.columns.nlevels > 1:
-                    rate_df.columns = rate_df.columns.droplevel(1)
-                rate_df = rate_df.dropna(subset=['Close'])
-                if not rate_df.empty:
-                    usd_krw_rate = float(rate_df['Close'].iloc[-1])
-        except Exception as e:
-            print(f"[Marquee] 환율 로드 실패: {e}")
 
-        data = yf.download(tickers, period="5d", interval="1d", group_by="ticker", progress=False)
-        marquee_items = []
-        for name, ticker in favorites:
-            try:
-                if isinstance(data.columns, pd.MultiIndex):
-                    df = data[ticker].copy()
-                else:
-                    df = data.copy()
-                
-                # 주말/휴일 등으로 인해 데이터가 없는 날(NaN)의 행을 제거하여 정상 가격 추출
-                df = df.dropna(subset=['Close'])
-                
-                if df.empty or len(df) < 2:
-                    continue
-                close_today = float(df['Close'].iloc[-1])
-                close_yesterday = float(df['Close'].iloc[-2])
-                diff = close_today - close_yesterday
-                pct = (diff / close_yesterday) * 100
-                
-                is_usd = not (ticker.endswith('.KS') or ticker.endswith('.KQ'))
-                price_str = fmt_price(close_today, usd_krw_rate, is_usd)
-                
-                if pct >= 0:
-                    item = f"<span style='color:#FF5252; font-weight:bold;'>{name}: {price_str} ▲{pct:.2f}%</span>"
-                else:
-                    item = f"<span style='color:#2979FF; font-weight:bold;'>{name}: {price_str} ▼{abs(pct):.2f}%</span>"
-                marquee_items.append(item)
-            except Exception as ex:
-                print(f"[Marquee Warning] {ticker} 파싱 실패: {ex}")
-        return " &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ".join(marquee_items)
-    except Exception as e:
-        print(f"[Marquee Error] 시세 수집 실패: {e}")
-        return "📊 실시간 시세를 수집할 수 없습니다."
 
 # ────────────────────────────────────────────────────────────
 # Plotly Interactive Chart Generator Helper Functions
@@ -560,43 +677,84 @@ def create_plotly_macd_chart(df):
 
 # 📊 실시간 주가 및 보조지표 연산 핵심 비즈니스 로직 함수
 @st.cache_data(show_spinner=False, ttl=60)
-def fetch_and_analyze_data(query, market, api_key=None):
+def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_source="google"):
     ticker = search_ticker_by_name(query, market)
     if ticker is None:
         raise ValueError(f"'{query}'에 해당하는 자산을 찾지 못했습니다. 올바른 티커를 입력해 주세요.")
 
-    # 1. 일봉 데이터 다운로드
-    df_all = yf.download(ticker, period='max', interval='1d')
+    yf_ticker = ticker
+    if ":" in ticker:
+        yf_ticker = ticker.split(":")[0]
+
+    # L Size (All-Time) 분석을 위해 과거 전체 일봉 데이터(yfinance)를 우선적으로 가져옵니다.
+    try:
+        df_all = yf.download(yf_ticker, period='max', interval='1d')
+    except Exception as e:
+        print(f"[yfinance download Error] {e}")
+
+    # yfinance 다운로드 실패 시 Google Finance 과거 데이터로 대체 (단, 최근 30여일 데이터만 제공됨)
+    if df_all.empty:
+        try:
+            df_all = gf.download_google_finance(ticker)
+        except Exception as e:
+            print(f"[GoogleFinance download Error] {e}")
+
     if df_all.empty:
         raise ValueError(f"'{ticker}' 데이터가 존재하지 않거나 가져오는 데 실패했습니다.")
+
+    # 1. 데이터 소스 선택에 따른 실시간 정보 수집
+    if data_source == "google":
+        try:
+            info = gf.get_ticker_info(ticker)
+            news_list = gf.get_ticker_news(ticker)
+            # Google Finance에서 제공하는 실시간 현재가 반영
+            if info.get('currentPrice') is not None:
+                current_price = info['currentPrice']
+                df_all.loc[df_all.index[-1], 'Close'] = current_price
+                if current_price > df_all.loc[df_all.index[-1], 'High']:
+                    df_all.loc[df_all.index[-1], 'High'] = current_price
+                if current_price < df_all.loc[df_all.index[-1], 'Low']:
+                    df_all.loc[df_all.index[-1], 'Low'] = current_price
+        except Exception as e:
+            print(f"[GoogleFinance Info/News Error] {e}")
+            try:
+                t_obj = yf.Ticker(yf_ticker)
+                info = t_obj.info
+                news_list = t_obj.news
+            except:
+                pass
+    else:
+        try:
+            t_obj = yf.Ticker(yf_ticker)
+            info = t_obj.info
+            try:
+                news_list = t_obj.news
+            except Exception as ne:
+                print(f"[Warning] Ticker.news 로드 실패: {ne}")
+        except Exception as e:
+            print(f"[Warning] Ticker.info 로드 실패: {e}")
 
     # MultiIndex 대응 컬럼 평탄화
     if df_all.columns.nlevels > 1:
         df_all.columns = df_all.columns.droplevel(1)
 
-    # 2. info 및 뉴스 로드
-    info = {}
-    news_list = []
-    try:
-        t_obj = yf.Ticker(ticker)
-        info = t_obj.info
-        try:
-            news_list = t_obj.news
-        except Exception as ne:
-            print(f"[Warning] Ticker.news 로드 실패: {ne}")
-    except Exception as e:
-        print(f"[Warning] Ticker.info 로드 실패: {e}")
-
     # 통화 판단
     is_usd = True
-    if ticker.endswith('.KS') or ticker.endswith('.KQ'):
+    if ticker.upper().endswith('.KS') or ticker.upper().endswith('.KQ'):
         is_usd = False
 
     # 실시간 적용 환율
     rate = 1.0
     if is_usd:
         try:
-            rate_df = yf.download("USDKRW=X", period="1d")
+            rate_df = pd.DataFrame()
+            if data_source == "google":
+                rate_df = gf.download_google_finance("USDKRW=X")
+                if rate_df.empty:
+                    rate_df = yf.download("USDKRW=X", period="1d")
+            else:
+                rate_df = yf.download("USDKRW=X", period="1d")
+                
             if rate_df.columns.nlevels > 1:
                 rate_df.columns = rate_df.columns.droplevel(1)
             rate = float(rate_df['Close'].iloc[-1])
@@ -650,7 +808,6 @@ def fetch_and_analyze_data(query, market, api_key=None):
     week52_high = float(df_52w['High'].max())
     week52_low = float(df_52w['Low'].min())
     week52_position = (current_price - week52_low) / (week52_high - week52_low) * 100 if (week52_high - week52_low) > 0 else 50
-
     # 4. 피보나치 중첩 분석 (L, M, S, XS)
     l_high = float(df_all['High'].max())
     l_low = float(df_all['Low'].min())
@@ -658,25 +815,51 @@ def fetch_and_analyze_data(query, market, api_key=None):
     l_signal = get_entry_signal(current_price, l_levels, current_rsi)
 
     df_m = df_all.tail(180).copy()
-    m_low_idx = df_m['Low'].idxmin()
-    m_low = float(df_m['Low'].min())
-    m_high = float(df_m.loc[m_low_idx:]['High'].max())
-    m_levels = get_fib_levels(m_high, m_low)
-    m_signal = get_entry_signal(current_price, m_levels, current_rsi)
-
     df_s = df_all.tail(30).copy()
-    s_low_idx = df_s['Low'].idxmin()
-    s_low = float(df_s['Low'].min())
-    s_high = float(df_s.loc[s_low_idx:]['High'].max())
-    s_levels = get_fib_levels(s_high, s_low)
-    s_signal = get_entry_signal(current_price, s_levels, current_rsi)
-
     df_xs = df_all.tail(7).copy()
-    xs_low_idx = df_xs['Low'].idxmin()
-    xs_low = float(df_xs['Low'].min())
-    xs_high = float(df_xs.loc[xs_low_idx:]['High'].max())
-    xs_levels = get_fib_levels(xs_high, xs_low)
-    xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
+
+    if nest_mode == "price":
+        # 가격 레벨 기반 수학적 중첩 (Fractal Price Nesting)
+        m_high, m_low = get_adjacent_l_levels(current_price, l_levels)
+        m_levels = get_fib_levels(m_high, m_low)
+        m_signal = get_entry_signal(current_price, m_levels, current_rsi)
+
+        s_high, s_low = get_adjacent_l_levels(current_price, m_levels)
+        s_levels = get_fib_levels(s_high, s_low)
+        s_signal = get_entry_signal(current_price, s_levels, current_rsi)
+
+        xs_high, xs_low = get_adjacent_l_levels(current_price, s_levels)
+        xs_levels = get_fib_levels(xs_high, xs_low)
+        xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
+    else:
+        # 기존 시간 주기 기반 중첩 (Time-based Multi-Timeframe)
+        m_low_idx = df_m['Low'].idxmin()
+        m_low = float(df_m['Low'].min())
+        m_high = float(df_m.loc[m_low_idx:]['High'].max())
+        m_levels = get_fib_levels(m_high, m_low)
+        m_signal = get_entry_signal(current_price, m_levels, current_rsi)
+
+        s_low_idx = df_s['Low'].idxmin()
+        s_low = float(df_s['Low'].min())
+        s_high = float(df_s.loc[s_low_idx:]['High'].max())
+        s_levels = get_fib_levels(s_high, s_low)
+        s_signal = get_entry_signal(current_price, s_levels, current_rsi)
+
+        xs_low_idx = df_xs['Low'].idxmin()
+        xs_low = float(df_xs['Low'].min())
+        xs_high = float(df_xs.loc[xs_low_idx:]['High'].max())
+        xs_levels = get_fib_levels(xs_high, xs_low)
+        xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
+
+    # T Size (Yesterday's Range)
+    if len(df_all) >= 2:
+        t_high = float(df_all['High'].iloc[-2])
+        t_low = float(df_all['Low'].iloc[-2])
+    else:
+        t_high = float(df_all['High'].iloc[-1])
+        t_low = float(df_all['Low'].iloc[-1])
+    t_levels = get_fib_levels(t_high, t_low)
+    t_signal = get_t_signal(current_price, t_levels, current_rsi)
 
     # 5. 기술 점수 및 판단
     signals = [l_signal, m_signal, s_signal, xs_signal]
@@ -697,20 +880,54 @@ def fetch_and_analyze_data(query, market, api_key=None):
     l_0146 = l_levels.get('0.146 (심층 지지선)', 0)
     xs_0618 = xs_levels.get('0.618 (첫 주요 지지선)', 0)
 
-    if current_price > l_0618 * 1.02:
-        best_buy = l_0618
-    elif current_price > l_0500 * 1.02:
-        best_buy = l_0500
-    elif current_price > l_0382 * 1.02:
-        best_buy = l_0382
-    elif current_price > l_0236 * 1.02:
-        best_buy = l_0236
-    elif current_price > l_0146 * 1.02:
-        best_buy = l_0146
-    elif current_rsi <= 30:
-        best_buy = xs_0618
+    # 다중 타임프레임 지지선 수집 및 최적 DCA 가격 연산
+    candidates = []
+    # L Size (All-Time)
+    for k in ['0.764 (1차 조정선)', '0.618 (첫 주요 지지선)', '0.500 (절반선)', '0.382 (두 번째 지지선)', '0.236 (최종 지지선)', '0.000 (저점)']:
+        if k in l_levels:
+            candidates.append((l_levels[k], 'L ' + k.split(' ')[0]))
+    # M Size (Nested L)
+    for k in ['0.764 (1차 조정선)', '0.618 (첫 주요 지지선)', '0.500 (절반선)', '0.382 (두 번째 지지선)', '0.000 (저점)']:
+        if k in m_levels:
+            candidates.append((m_levels[k], 'M ' + k.split(' ')[0]))
+    # S Size (Nested M)
+    for k in ['0.618 (첫 주요 지지선)', '0.500 (절반선)', '0.382 (두 번째 지지선)', '0.000 (저점)']:
+        if k in s_levels:
+            candidates.append((s_levels[k], 'S ' + k.split(' ')[0]))
+    # XS Size (Nested S)
+    for k in ['0.618 (첫 주요 지지선)', '0.382 (두 번째 지지선)', '0.000 (저점)']:
+        if k in xs_levels:
+            candidates.append((xs_levels[k], 'XS ' + k.split(' ')[0]))
+
+    # 현재가보다 낮은 지지선만 유효한 매수 후보로 간주 (마진 0.5% 적용)
+    valid_candidates = [c for c in candidates if c[0] < current_price * 0.995]
+    
+    if not valid_candidates:
+        best_buy = current_price
+        best_buy_desc = "현재가 기준 (하단 지지선 없음)"
     else:
-        best_buy = l_levels.get('0.000 (저점)', current_price)
+        # 지지선 가격 기준 내림차순 정렬 (현재가와 가장 가까운 지지선이 맨 앞)
+        valid_candidates.sort(key=lambda x: x[0], reverse=True)
+        
+        # 추세 강도(종합 점수)에 따라 추천 지지선 깊이 차별화
+        if composite_score >= 75:
+            # 강한 상승 추세: 가장 가까운 1차 지지선 추천
+            best_buy, best_buy_source = valid_candidates[0]
+            best_buy_desc = f"{best_buy_source} 지지선 기준 (강세 추세)"
+        elif composite_score >= 50:
+            # 보통 추세: 조금 더 아래의 2차 지지선 추천
+            idx = min(1, len(valid_candidates) - 1)
+            best_buy, best_buy_source = valid_candidates[idx]
+            best_buy_desc = f"{best_buy_source} 지지선 기준 (보통 추세)"
+        else:
+            # 약세/하락 추세: 깊은 3차 지지선 또는 장기 L 지지선 추천
+            l_supports = [c for c in valid_candidates if c[1].startswith('L ')]
+            if l_supports:
+                best_buy, best_buy_source = l_supports[0]
+            else:
+                idx = min(2, len(valid_candidates) - 1)
+                best_buy, best_buy_source = valid_candidates[idx]
+            best_buy_desc = f"{best_buy_source} 지지선 기준 (약세 조정대응)"
 
     best_buy_str = fmt_price(best_buy, rate, is_usd)
 
@@ -751,7 +968,7 @@ def fetch_and_analyze_data(query, market, api_key=None):
     full_report_content = f"""
 # 📊 {ticker} 멀티 타임프레임 피보나치 중첩 분석 리포트
 
-- **분석 기준**: 역사적 대파동(L), 중기 파동(M), 단기 변곡(S), 초단기 극세(XS) 중첩
+- **분석 기준**: 역사적 대파동(L), 중기 파동(M), 단기 변곡(S), 초단기 극세(XS) 중첩 및 어제 하루 범위 돌파(T)
 - **적용 환율**: 1달러 = {rate:,.2f}원 (원화 환산 가격 표시)
 
 ---
@@ -771,6 +988,7 @@ def fetch_and_analyze_data(query, market, api_key=None):
 | **M Size (Nested L)** | L의 인접 피보나치 레벨 사이 | {fmt_price(m_high, rate, is_usd)} | {fmt_price(m_low, rate, is_usd)} | **{m_signal}** |
 | **S Size (Nested M)** | M의 인접 피보나치 레벨 사이 | {fmt_price(s_high, rate, is_usd)} | {fmt_price(s_low, rate, is_usd)} | **{s_signal}** |
 | **XS Size (Nested S)** | S의 인접 피보나치 레벨 사이 | {fmt_price(xs_high, rate, is_usd)} | {fmt_price(xs_low, rate, is_usd)} | **{xs_signal}** |
+| **T Size (Yesterday)** | 어제 하루 범위 | {fmt_price(t_high, rate, is_usd)} | {fmt_price(t_low, rate, is_usd)} | **{t_signal}** |
 
 ---
 
@@ -787,6 +1005,9 @@ def fetch_and_analyze_data(query, market, api_key=None):
 
 ### ⏰ XS Size (Nested S) 상세 레벨
 {make_fib_markdown_table(xs_levels, current_price, rate, is_usd)}
+
+### ⏳ T Size (Yesterday) 상세 레벨
+{make_fib_markdown_table(t_levels, current_price, rate, is_usd)}
 
 ---
 
@@ -820,11 +1041,13 @@ def fetch_and_analyze_data(query, market, api_key=None):
 
     return {
         'ticker': ticker,
+        'asset_name': info.get('longName') or info.get('shortName') or info.get('name') or ticker,
         'current_price': current_price,
         'current_rsi': current_rsi,
         'composite_score': composite_score,
         'score_label': score_label,
         'best_buy_str': best_buy_str,
+        'best_buy_desc': best_buy_desc,
         'rec_ko': rec_ko,
         'is_usd': is_usd,
         'rate': rate,
@@ -836,10 +1059,13 @@ def fetch_and_analyze_data(query, market, api_key=None):
         'm_levels': m_levels,
         's_levels': s_levels,
         'xs_levels': xs_levels,
+        't_levels': t_levels,
         'l_high': l_high, 'l_low': l_low,
         'm_high': m_high, 'm_low': m_low,
         's_high': s_high, 's_low': s_low,
         'xs_high': xs_high, 'xs_low': xs_low,
+        't_high': t_high, 't_low': t_low,
+        't_signal': t_signal,
         'report_markdown': full_report_content,
         'damus_data': damus_data
     }
@@ -852,7 +1078,7 @@ def fetch_and_analyze_data(query, market, api_key=None):
 marquee_html = f"""
 <div style="background-color: #121216; border: 1px solid #282834; border-radius: 10px; padding: 10px; overflow: hidden; white-space: nowrap; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.45);">
     <marquee scrollamount="4" behavior="scroll" direction="left" onmouseover="this.stop();" onmouseout="this.start();" style="font-family:'Outfit','Noto Sans KR',sans-serif; font-size:13px;">
-        {get_marquee_prices(st.session_state.favorites)}
+        {get_marquee_prices(st.session_state.favorites, data_source=data_source)}
     </marquee>
 </div>
 """
@@ -864,7 +1090,54 @@ main_container = st.container(key="fibo_dashboard_main_container")
 with main_container:
     try:
         with st.spinner("🎯 실시간 시장 정보 및 보조지표를 연산하는 중입니다..."):
-            results = fetch_and_analyze_data(st.session_state.search_ticker, market_opt, api_key=user_api_key)
+            results = fetch_and_analyze_data(st.session_state.search_ticker, market_opt, api_key=user_api_key, nest_mode=nest_mode, data_source=data_source)
+            
+            # 피보나치 실시간 알림 스레드 시작/중지 자동 제어
+            current_damus_tickers = alert_manager.get_damus_alert_tickers()
+            if results['ticker'] in current_damus_tickers:
+                token, chat_id = alert_manager.get_token_and_chat_id()
+                if token and chat_id:
+                    if getattr(alert_manager, '_damus_ticker', None) != results['ticker'] or not alert_manager._damus_running:
+                        alert_manager.start_damus_monitor(results['ticker'], results['is_usd'], check_interval_sec=60)
+            else:
+                if getattr(alert_manager, '_damus_ticker', None) == results['ticker'] and alert_manager._damus_running:
+                    alert_manager.stop_damus_monitor()
+            
+            # 검색 및 불러온 자산 검증 카드 및 즐겨찾기 토글 버튼 표시
+            is_favorited = any(f[1].upper() == results['ticker'].upper() for f in st.session_state.favorites)
+            
+            with st.container():
+                col_info, col_star = st.columns([0.75, 0.25], vertical_alignment="center")
+                with col_info:
+                    st.markdown(f"""
+                    <div style="background: rgba(30, 41, 59, 0.45); border-left: 5px solid #3B82F6; border-radius: 12px; padding: 16px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.25);">
+                        <div style="color: #94A3B8; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">🔍 분석 대상 자산 검증 (입력된 검색어: "{st.session_state.search_ticker}")</div>
+                        <div style="display: flex; align-items: baseline; margin-top: 5px;">
+                            <span style="color: #FFFFFF; font-size: 22px; font-weight: 700;">{results['asset_name']}</span>
+                            <span style="color: #38BDF8; font-size: 16px; font-weight: 600; margin-left: 10px;">({results['ticker']})</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_star:
+                    star_icon = "⭐" if is_favorited else "☆"
+                    star_help = "즐겨찾기 해제" if is_favorited else "즐겨찾기 등록"
+                    if st.button(f"{star_icon} {star_help}", key="toggle_favorite_btn", use_container_width=True):
+                        if is_favorited:
+                            st.session_state.favorites = [f for f in st.session_state.favorites if f[1].upper() != results['ticker'].upper()]
+                            save_favorites(st.session_state.favorites)
+                            get_marquee_prices.clear()
+                            st.toast(f"❌ {results['asset_name']} 즐겨찾기 해제 완료!", icon="⭐")
+                            st.rerun()
+                        else:
+                            short_name = results['asset_name'].split(" ")[0]
+                            if len(short_name) > 8:
+                                short_name = short_name[:8]
+                            st.session_state.favorites.append((short_name, results['ticker']))
+                            save_favorites(st.session_state.favorites)
+                            get_marquee_prices.clear()
+                            st.toast(f"⭐ {results['asset_name']} 즐겨찾기 등록 완료!", icon="⭐")
+                            st.rerun()
+            st.write("")
             
         # ────────────────────────────────────────────────────────────
         # 1. 4구역 KPI 핵심 카드 섹션
@@ -894,7 +1167,7 @@ with main_container:
             <div class="dashboard-card">
                 <div class="kpi-title">💡 최적의 분할매수(DCA) 타점</div>
                 <div class="kpi-val">{results['best_buy_str']}</div>
-                <div class="kpi-desc">역사적 피보나치 주요 지지대 기준</div>
+                <div class="kpi-desc">{results.get('best_buy_desc', '역사적 피보나치 기준')}</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -920,8 +1193,8 @@ with main_container:
         # L Size 차트 연산 및 렌더링
         with tab1:
             fig_l = create_plotly_candlestick_chart(
-                df=results['df_all'].tail(1000).copy(),
-                title=f"L Size: All-Time (최근 1000봉) / 고점: {fmt_chart_val(results['l_high'], results['is_usd'])} / 저점: {fmt_chart_val(results['l_low'], results['is_usd'])}",
+                df=results['df_all'].copy(),
+                title=f"L Size: All-Time / 고점: {fmt_chart_val(results['l_high'], results['is_usd'])} / 저점: {fmt_chart_val(results['l_low'], results['is_usd'])}",
                 fib_levels=results['l_levels'],
                 is_usd=results['is_usd']
             )

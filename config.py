@@ -22,18 +22,32 @@ DEFAULT_FAVORITES = [
 ]
 
 def load_favorites():
+    favs = DEFAULT_FAVORITES.copy()
     if os.path.exists(FAVORITES_FILE):
         try:
             with open(FAVORITES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                favs = json.load(f)
         except:
             pass
-    return DEFAULT_FAVORITES.copy()
+    # Normalize ticker to uppercase
+    normalized = []
+    for item in favs:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            normalized.append([item[0], item[1].upper()])
+        else:
+            normalized.append(item)
+    return normalized
 
 def save_favorites(favs):
+    normalized = []
+    for item in favs:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            normalized.append([item[0], item[1].upper()])
+        else:
+            normalized.append(item)
     try:
         with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
-            json.dump(favs, f, ensure_ascii=False, indent=4)
+            json.dump(normalized, f, ensure_ascii=False, indent=4)
     except:
         pass
 

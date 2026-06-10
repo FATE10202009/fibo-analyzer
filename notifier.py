@@ -183,8 +183,8 @@ class AlertManager:
                 
             if triggered:
                 # 심볼 포맷팅
-                symbol_str = ticker
-                if not (ticker.endswith(".KS") or ticker.endswith(".KQ")):
+                symbol_str = ticker.upper()
+                if not (symbol_str.endswith(".KS") or symbol_str.endswith(".KQ")):
                     price_str = f"${current_price:,.4f}"
                     target_str = f"${target:,.4f}"
                 else:
@@ -287,13 +287,22 @@ class AlertManager:
             return
 
         cp  = data['current_price']
-        levels = [
-            ("🥔 SOP (감자)",   data['sop'], "SOP"),
+        levels = []
+        active_sops = data.get('active_sops', [])
+        for t, s_val in active_sops:
+            time_str = t.strftime('%H:%M')
+            levels.append((f"🥔 SOP ({time_str} 감자)", s_val, f"SOP_{t.strftime('%Y%m%d%H%M')}"))
+        
+        # 만약 미체크 SOP가 없다면 호환성을 위해 기본 단일 SOP 삽입
+        if not active_sops and data.get('sop'):
+            levels.append(("🥔 SOP (감자, 기본)", data['sop'], "SOP"))
+
+        levels.extend([
             ("📈 R7 실시간고점", data['r7'],  "R7"),
             ("📉 R2 실시간저점", data['r2'],  "R2"),
             ("🔶 Y7 전일고가",   data['y7'],  "Y7"),
             ("🔷 Y2 전일저가",   data['y2'],  "Y2"),
-        ]
+        ])
         # 숙제 레벨도 추가
         for hw_name, hw_price, _ in data.get('homework', []):
             levels.append((f"🔔 숙제 {hw_name}", hw_price, f"HW_{hw_price:.4f}"))

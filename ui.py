@@ -15,7 +15,7 @@ from config import (
 from search import search_ticker_by_name
 from analysis import (
     fmt_price, fmt_range, fmt_large_value, fmt_chart_val,
-    get_fib_levels, get_entry_signal, get_adjacent_l_levels,
+    get_fib_levels, get_entry_signal, get_t_signal, get_adjacent_l_levels,
     calculate_composite_score, score_to_label, make_fib_markdown_table,
     generate_figures, format_fundamental_report, generate_future_outlook,
     generate_fibonacci_scenario_md, generate_news_impact_md,
@@ -148,7 +148,7 @@ def run_analysis_async(search_query, market_opt="all", interval="1d", session_id
             df_all.columns = df_all.columns.droplevel(1)
 
         is_usd = True
-        if ticker.endswith('.KS') or ticker.endswith('.KQ'):
+        if ticker.upper().endswith('.KS') or ticker.upper().endswith('.KQ'):
             is_usd = False
 
         rate = 1.0
@@ -216,29 +216,56 @@ def run_analysis_async(search_query, market_opt="all", interval="1d", session_id
         l_levels = get_fib_levels(l_high, l_low)
         l_signal = get_entry_signal(current_price, l_levels, current_rsi)
 
-        # M Size (최근 180일 기준 프랙탈 변곡점)
         df_m = df_all.tail(180).copy()
-        m_low_idx = df_m['Low'].idxmin()
-        m_low = float(df_m['Low'].min())
-        m_high = float(df_m.loc[m_low_idx:]['High'].max())
-        m_levels = get_fib_levels(m_high, m_low)
-        m_signal = get_entry_signal(current_price, m_levels, current_rsi)
-
-        # S Size (최근 30일 기준 프랙탈 변곡점)
         df_s = df_all.tail(30).copy()
-        s_low_idx = df_s['Low'].idxmin()
-        s_low = float(df_s['Low'].min())
-        s_high = float(df_s.loc[s_low_idx:]['High'].max())
-        s_levels = get_fib_levels(s_high, s_low)
-        s_signal = get_entry_signal(current_price, s_levels, current_rsi)
-
-        # XS Size (최근 7일 기준 프랙탈 변곡점)
         df_xs = df_all.tail(7).copy()
-        xs_low_idx = df_xs['Low'].idxmin()
-        xs_low = float(df_xs['Low'].min())
-        xs_high = float(df_xs.loc[xs_low_idx:]['High'].max())
-        xs_levels = get_fib_levels(xs_high, xs_low)
-        xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
+
+        nest_mode = "time"
+        if _app_root and hasattr(_app_root, "nest_mode_var"):
+            nest_mode = _app_root.nest_mode_var.get()
+
+        if nest_mode == "price":
+            # 가격 레벨 기반 수학적 중첩 (Fractal Price Nesting)
+            m_high, m_low = get_adjacent_l_levels(current_price, l_levels)
+            m_levels = get_fib_levels(m_high, m_low)
+            m_signal = get_entry_signal(current_price, m_levels, current_rsi)
+
+            s_high, s_low = get_adjacent_l_levels(current_price, m_levels)
+            s_levels = get_fib_levels(s_high, s_low)
+            s_signal = get_entry_signal(current_price, s_levels, current_rsi)
+
+            xs_high, xs_low = get_adjacent_l_levels(current_price, s_levels)
+            xs_levels = get_fib_levels(xs_high, xs_low)
+            xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
+        else:
+            # 기존 시간 주기 기반 중첩 (Time-based Multi-Timeframe)
+            m_low_idx = df_m['Low'].idxmin()
+            m_low = float(df_m['Low'].min())
+            m_high = float(df_m.loc[m_low_idx:]['High'].max())
+            m_levels = get_fib_levels(m_high, m_low)
+            m_signal = get_entry_signal(current_price, m_levels, current_rsi)
+
+            s_low_idx = df_s['Low'].idxmin()
+            s_low = float(df_s['Low'].min())
+            s_high = float(df_s.loc[s_low_idx:]['High'].max())
+            s_levels = get_fib_levels(s_high, s_low)
+            s_signal = get_entry_signal(current_price, s_levels, current_rsi)
+
+            xs_low_idx = df_xs['Low'].idxmin()
+            xs_low = float(df_xs['Low'].min())
+            xs_high = float(df_xs.loc[xs_low_idx:]['High'].max())
+            xs_levels = get_fib_levels(xs_high, xs_low)
+            xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
+
+        # T Size (Yesterday's Range)
+        if len(df_all) >= 2:
+            t_high = float(df_all['High'].iloc[-2])
+            t_low = float(df_all['Low'].iloc[-2])
+        else:
+            t_high = float(df_all['High'].iloc[-1])
+            t_low = float(df_all['Low'].iloc[-1])
+        t_levels = get_fib_levels(t_high, t_low)
+        t_signal = get_t_signal(current_price, t_levels, current_rsi)
 
         # 종합 기술 점수
         signals = [l_signal, m_signal, s_signal, xs_signal]
@@ -330,6 +357,9 @@ def run_analysis_async(search_query, market_opt="all", interval="1d", session_id
 * XS (Nested S): {xs_signal}
   (범위: {fmt_range(xs_low, xs_high, rate, is_usd)})
 
+* T Size (Yesterday): {t_signal}
+  (어제 범위: {fmt_range(t_low, t_high, rate, is_usd)})
+
 -------------------------------------
 3. 신규 보조지표 분석
 -------------------------------------
@@ -402,6 +432,7 @@ def run_analysis_async(search_query, market_opt="all", interval="1d", session_id
 | **M Size (Nested L)** | L의 인접 피보나치 레벨 사이 | {fmt_price(m_high, rate, is_usd)} | {fmt_price(m_low, rate, is_usd)} | **{m_signal}** |
 | **S Size (Nested M)** | M의 인접 피보나치 레벨 사이 | {fmt_price(s_high, rate, is_usd)} | {fmt_price(s_low, rate, is_usd)} | **{s_signal}** |
 | **XS Size (Nested S)** | S의 인접 피보나치 레벨 사이 | {fmt_price(xs_high, rate, is_usd)} | {fmt_price(xs_low, rate, is_usd)} | **{xs_signal}** |
+| **T Size (Yesterday)** | 어제 일봉 범위 | {fmt_price(t_high, rate, is_usd)} | {fmt_price(t_low, rate, is_usd)} | **{t_signal}** |
 
 ---
 
@@ -411,6 +442,11 @@ def run_analysis_async(search_query, market_opt="all", interval="1d", session_id
 | 피보나치 비율 | 레벨 구분 | 타겟 가격 | 현재가와의 이격 |
 | :--- | :--- | :--- | :--- |
 {make_fib_markdown_table(l_levels, current_price, rate, is_usd)}
+
+### 📊 T Size (Yesterday's Range) 상세 레벨
+| 피보나치 비율 | 레벨 구분 | 타겟 가격 | 현재가와의 이격 |
+| :--- | :--- | :--- | :--- |
+{make_fib_markdown_table(t_levels, current_price, rate, is_usd)}
 
 ### 📅 M Size (Nested L) 상세 레벨
 | 피보나치 비율 | 레벨 구분 | 타겟 가격 | 현재가와의 이격 |
@@ -573,28 +609,54 @@ def run_analysis_async(search_query, market_opt="all", interval="1d", session_id
             figs['DAMUS'] = generate_damus_chart(damus_data)
         plt.close('all')  # 배치 처리 시 matplotlib 메모리 누수 방지
 
-        # 적정 매수가 도출
-        l_0618 = l_levels.get('0.618 (첫 주요 지지선)', 0)
-        l_0500 = l_levels.get('0.500 (절반선)', 0)
-        l_0382 = l_levels.get('0.382 (두 번째 지지선)', 0)
-        l_0236 = l_levels.get('0.236 (최종 지지선)', 0)
-        l_0146 = l_levels.get('0.146 (심층 지지선)', 0)
-        xs_0618 = xs_levels.get('0.618 (첫 주요 지지선)', 0)
+        # 다중 타임프레임 지지선 수집 및 최적 DCA 가격 연산
+        candidates = []
+        # L Size (All-Time)
+        for k in ['0.764 (1차 조정선)', '0.618 (첫 주요 지지선)', '0.500 (절반선)', '0.382 (두 번째 지지선)', '0.236 (최종 지지선)', '0.000 (저점)']:
+            if k in l_levels:
+                candidates.append((l_levels[k], 'L ' + k.split(' ')[0]))
+        # M Size (Nested L)
+        for k in ['0.764 (1차 조정선)', '0.618 (첫 주요 지지선)', '0.500 (절반선)', '0.382 (두 번째 지지선)', '0.000 (저점)']:
+            if k in m_levels:
+                candidates.append((m_levels[k], 'M ' + k.split(' ')[0]))
+        # S Size (Nested M)
+        for k in ['0.618 (첫 주요 지지선)', '0.500 (절반선)', '0.382 (두 번째 지지선)', '0.000 (저점)']:
+            if k in s_levels:
+                candidates.append((s_levels[k], 'S ' + k.split(' ')[0]))
+        # XS Size (Nested S)
+        for k in ['0.618 (첫 주요 지지선)', '0.382 (두 번째 지지선)', '0.000 (저점)']:
+            if k in xs_levels:
+                candidates.append((xs_levels[k], 'XS ' + k.split(' ')[0]))
 
-        if current_price > l_0618 * 1.02:
-            best_buy = l_0618
-        elif current_price > l_0500 * 1.02:
-            best_buy = l_0500
-        elif current_price > l_0382 * 1.02:
-            best_buy = l_0382
-        elif current_price > l_0236 * 1.02:
-            best_buy = l_0236
-        elif current_price > l_0146 * 1.02:
-            best_buy = l_0146
-        elif current_rsi <= 30:
-            best_buy = xs_0618
+        # 현재가보다 낮은 지지선만 유효한 매수 후보로 간주 (마진 0.5% 적용)
+        valid_candidates = [c for c in candidates if c[0] < current_price * 0.995]
+        
+        if not valid_candidates:
+            best_buy = current_price
+            best_buy_desc = "현재가 기준 (하단 지지선 없음)"
         else:
-            best_buy = l_levels.get('0.000 (저점)', current_price)
+            # 지지선 가격 기준 내림차순 정렬 (현재가와 가장 가까운 지지선이 맨 앞)
+            valid_candidates.sort(key=lambda x: x[0], reverse=True)
+            
+            # 추세 강도(종합 점수)에 따라 추천 지지선 깊이 차별화
+            if composite_score >= 75:
+                # 강한 상승 추세: 가장 가까운 1차 지지선 추천
+                best_buy, best_buy_source = valid_candidates[0]
+                best_buy_desc = f"{best_buy_source} 지지선 기준 (강세 추세)"
+            elif composite_score >= 50:
+                # 보통 추세: 조금 더 아래의 2차 지지선 추천
+                idx = min(1, len(valid_candidates) - 1)
+                best_buy, best_buy_source = valid_candidates[idx]
+                best_buy_desc = f"{best_buy_source} 지지선 기준 (보통 추세)"
+            else:
+                # 약세/하락 추세: 깊은 3차 지지선 또는 장기 L 지지선 추천
+                l_supports = [c for c in valid_candidates if c[1].startswith('L ')]
+                if l_supports:
+                    best_buy, best_buy_source = l_supports[0]
+                else:
+                    idx = min(2, len(valid_candidates) - 1)
+                    best_buy, best_buy_source = valid_candidates[idx]
+                best_buy_desc = f"{best_buy_source} 지지선 기준 (약세 조정대응)"
 
         best_buy_str = fmt_price(best_buy, rate, is_usd)
 
@@ -626,13 +688,14 @@ def run_analysis_async(search_query, market_opt="all", interval="1d", session_id
             'rate': rate,
             'is_usd': is_usd,
             'df_all': df_all,
-            'damus_today_1h': damus_data['df_today_1h'] if damus_data and len(damus_data.get('df_today_1h', [])) > 0 else None,
+            'damus_today_1h': damus_data['df_today_1h'] if (damus_data and len(damus_data.get('df_today_1h', [])) >= 2) else (damus_data['df_1h'].tail(24) if damus_data else None),
             # 대시보드 카드용 추가 필드
             'composite_score': composite_score,
             'current_macd': current_macd,
             'current_macd_signal': current_macd_signal,
             'current_macd_hist': current_macd_hist,
             'best_buy_str': best_buy_str,
+            'best_buy_desc': best_buy_desc,
             'rec_ko': rec_ko,
             # AI 및 요약 진단 데이터
             'session_id': session_id,
@@ -824,6 +887,19 @@ class FiboAnalyzerApp:
         rb_all.pack(side=tk.LEFT, padx=2)
         rb_nas.pack(side=tk.LEFT, padx=2)
         rb_bin.pack(side=tk.LEFT, padx=2)
+        
+        # 피보나치 중첩 모드 선택 라디오 버튼 추가
+        self.nest_mode_var = tk.StringVar(value="time")
+        
+        def on_nest_mode_change():
+            if getattr(self, "current_ticker", None):
+                self.refresh_current_ticker()
+                
+        tk.Label(search_top_frame, text=" | 피보나치:", font=("Segoe UI", 8, "bold"), fg=TEXT_MUTED, bg=BG_PANEL).pack(side=tk.LEFT, padx=(5, 2))
+        rb_nest_time = tk.Radiobutton(search_top_frame, text="시간", variable=self.nest_mode_var, value="time", bg=BG_PANEL, fg=TEXT_LIGHT, selectcolor=BG_PANEL, activebackground=BG_PANEL, activeforeground=TEXT_LIGHT, font=("Segoe UI", 8, "bold"), cursor='hand2', command=on_nest_mode_change)
+        rb_nest_price = tk.Radiobutton(search_top_frame, text="가격", variable=self.nest_mode_var, value="price", bg=BG_PANEL, fg=TEXT_LIGHT, selectcolor=BG_PANEL, activebackground=BG_PANEL, activeforeground=TEXT_LIGHT, font=("Segoe UI", 8, "bold"), cursor='hand2', command=on_nest_mode_change)
+        rb_nest_time.pack(side=tk.LEFT, padx=2)
+        rb_nest_price.pack(side=tk.LEFT, padx=2)
         
 
         
@@ -1152,7 +1228,7 @@ class FiboAnalyzerApp:
 
         def worker():
             try:
-                is_usd = not (ticker.endswith('.KS') or ticker.endswith('.KQ'))
+                is_usd = not (ticker.upper().endswith('.KS') or ticker.upper().endswith('.KQ'))
                 period = '2d' if is_usd else '5d'
                 df = yf.download(ticker, period=period, progress=False)
                 if df.columns.nlevels > 1:
@@ -1939,7 +2015,7 @@ class FiboAnalyzerApp:
             fav_copy = self.favorites.copy()
             for name, ticker in fav_copy:
                 try:
-                    is_usd = not (ticker.endswith('.KS') or ticker.endswith('.KQ'))
+                    is_usd = not (ticker.upper().endswith('.KS') or ticker.upper().endswith('.KQ'))
                     # 국내주식은 야후 데이터 지연이 있어 5d로 넉넉히 가져옴
                     period = '2d' if is_usd else '5d'
                     df = yf.download(ticker, period=period, progress=False)
@@ -1960,7 +2036,7 @@ class FiboAnalyzerApp:
                         prices_data.append((ticker, None, None, is_usd))
                 except Exception as e:
                     print(f"[Status Bar Price] {ticker} 시세 로드 실패: {e}")
-                    prices_data.append((ticker, None, None, not (ticker.endswith('.KS') or ticker.endswith('.KQ'))))
+                    prices_data.append((ticker, None, None, not (ticker.upper().endswith('.KS') or ticker.upper().endswith('.KQ'))))
                 time.sleep(0.05) # 대기를 살짝 단축하여 전체 속도를 보장합니다.
 
             # 2. 야후 파이낸스 급등/급락 스크래핑
@@ -2321,6 +2397,7 @@ class FiboAnalyzerApp:
             self.update_favorite_button_state()
             
         self.fav_container.canvas.configure(scrollregion=self.fav_container.canvas.bbox("all"))
+        self.fetch_status_bar_prices_async()
 
     def select_tab(self, ticker):
         self.current_ticker = ticker
@@ -2402,6 +2479,7 @@ class FiboAnalyzerApp:
             
         self.load_favorites_ui()
         self.update_favorite_button_state()
+        self.fetch_status_bar_prices_async()
 
     def update_favorite_button_state(self):
         ticker = self.current_ticker
@@ -2470,7 +2548,7 @@ class FiboAnalyzerApp:
         def fetch_fundamental():
             try:
                 rate = 1.0
-                is_usd = not (ticker.endswith('.KS') or ticker.endswith('.KQ'))
+                is_usd = not (ticker.upper().endswith('.KS') or ticker.upper().endswith('.KQ'))
                 if is_usd:
                     try:
                         rate_df = yf.download("USDKRW=X", period="1d")
@@ -2650,7 +2728,8 @@ class FiboAnalyzerApp:
                 
                 # 2) 백테스트 구동
                 from backtest import run_backtest, generate_backtest_chart
-                res = run_backtest(df, ticker, limit_years=5)
+                nest_mode = self.nest_mode_var.get()
+                res = run_backtest(df, ticker, limit_years=5, nest_mode=nest_mode)
                 
                 if not res["success"]:
                     popup.after(0, lambda: display_error(res["message"]))
@@ -3484,7 +3563,7 @@ class FiboAnalyzerApp:
         # 각 탭에 대응하는 데이터 윈도우 필터링
         # ★ 차트 draw_candlestick_with_volume의 tail() 값과 반드시 일치해야 함
         if key == 'L':
-            df_plot = self.current_df.tail(1000).copy()
+            df_plot = self.current_df.copy()
         elif key in ['M', 'RSI', 'MACD']:
             df_plot = self.current_df.tail(180).copy()
         elif key == 'S':
@@ -3834,7 +3913,8 @@ class FiboAnalyzerApp:
                         df.columns = df.columns.droplevel(1)
                         
                     log(f"[{ticker}] 백테스트 연산 시작...")
-                    res = _run_bt(df, ticker, limit_years=5)
+                    nest_mode = self.nest_mode_var.get()
+                    res = _run_bt(df, ticker, limit_years=5, nest_mode=nest_mode)
                     if not res.get("success", False):
                         log(f"❌ [{ticker}] 백테스트 실패: {res.get('message')}")
                         continue
@@ -4023,7 +4103,7 @@ class FiboAnalyzerApp:
         def run_damus_fetch_thread():
             try:
                 rate = 1.0
-                is_usd = not (ticker.endswith('.KS') or ticker.endswith('.KQ'))
+                is_usd = not (ticker.upper().endswith('.KS') or ticker.upper().endswith('.KQ'))
                 if is_usd:
                     try:
                         rate_df = yf.download("USDKRW=X", period="1d", progress=False)
@@ -4041,7 +4121,7 @@ class FiboAnalyzerApp:
                 report_content = generate_damus_report_md(data, rate)
                 fig = generate_damus_chart(data)
                 
-                popup.after(0, lambda: display_success(report_content, fig))
+                popup.after(0, lambda: display_success(report_content, fig, data))
                 
             except Exception as ex:
                 import traceback
@@ -4054,7 +4134,7 @@ class FiboAnalyzerApp:
             text_box.insert(tk.END, err_msg)
             text_box.config(state=tk.DISABLED)
             
-        def display_success(report_text, fig):
+        def display_success(report_text, fig, data):
             text_box.config(state=tk.NORMAL)
             text_box.delete("1.0", tk.END)
             text_box.insert(tk.END, report_text)
@@ -4064,6 +4144,14 @@ class FiboAnalyzerApp:
             canvas = FigureCanvasTkAgg(fig, master=chart_container)
             canvas.draw()
             canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            
+            # 호버 툴팁 바인딩
+            df_today_1h = data.get('df_today_1h')
+            df_1h = data.get('df_1h')
+            df_plot = df_today_1h if (df_today_1h is not None and len(df_today_1h) >= 2) else df_1h.tail(24)
+            self.current_damus_df = df_plot
+            self.bind_hover_tooltip(canvas, fig, 'DAMUS', is_usd, rate)
+            
             popup.update() # 레이아웃 업데이트 강제
             
         d_thread = threading.Thread(target=run_damus_fetch_thread)
@@ -4205,7 +4293,7 @@ class FiboAnalyzerApp:
             
             # 현재 분석 중인 티커와 동일하다면, 모니터링 스레드 제어
             if ticker == self.current_ticker:
-                is_usd = not (ticker.endswith('.KS') or ticker.endswith('.KQ'))
+                is_usd = not (ticker.upper().endswith('.KS') or ticker.upper().endswith('.KQ'))
                 tok, cid = alert_manager.get_token_and_chat_id()
                 if is_enabled and tok and cid:
                     alert_manager.start_damus_monitor(ticker, is_usd, check_interval_sec=60)
@@ -4520,7 +4608,7 @@ class FiboAnalyzerApp:
             import time
             from analysis import (
                 fmt_price, fmt_range, fmt_large_value, fmt_chart_val,
-                get_fib_levels, get_entry_signal, get_adjacent_l_levels,
+                get_fib_levels, get_entry_signal, get_t_signal, get_adjacent_l_levels,
                 calculate_composite_score, score_to_label, make_fib_markdown_table,
                 generate_figures, format_fundamental_report, generate_future_outlook,
                 generate_fibonacci_scenario_md, generate_news_impact_md,
@@ -4555,7 +4643,7 @@ class FiboAnalyzerApp:
                     if df_all.columns.nlevels > 1:
                         df_all.columns = df_all.columns.droplevel(1)
 
-                    is_usd = not (ticker.endswith('.KS') or ticker.endswith('.KQ'))
+                    is_usd = not (ticker.upper().endswith('.KS') or ticker.upper().endswith('.KQ'))
                     rate = 1.0
                     if is_usd:
                         try:
@@ -4607,31 +4695,59 @@ class FiboAnalyzerApp:
                     week52_low  = float(df_52w['Low'].min())
                     week52_pos  = (current_price - week52_low) / (week52_high - week52_low) * 100 if (week52_high - week52_low) > 0 else 50
 
+                    nest_mode = self.nest_mode_var.get()
+
                     l_high   = float(df_all['High'].max())
                     l_low    = float(df_all['Low'].min())
                     l_levels = get_fib_levels(l_high, l_low)
                     l_signal = get_entry_signal(current_price, l_levels, current_rsi)
 
                     df_m     = df_all.tail(180).copy()
-                    m_low_idx = df_m['Low'].idxmin()
-                    m_low    = float(df_m['Low'].min())
-                    m_high   = float(df_m.loc[m_low_idx:]['High'].max())
-                    m_levels = get_fib_levels(m_high, m_low)
-                    m_signal = get_entry_signal(current_price, m_levels, current_rsi)
-
                     df_s     = df_all.tail(30).copy()
-                    s_low_idx = df_s['Low'].idxmin()
-                    s_low    = float(df_s['Low'].min())
-                    s_high   = float(df_s.loc[s_low_idx:]['High'].max())
-                    s_levels = get_fib_levels(s_high, s_low)
-                    s_signal = get_entry_signal(current_price, s_levels, current_rsi)
-
                     df_xs    = df_all.tail(7).copy()
-                    xs_low_idx = df_xs['Low'].idxmin()
-                    xs_low   = float(df_xs['Low'].min())
-                    xs_high  = float(df_xs.loc[xs_low_idx:]['High'].max())
-                    xs_levels = get_fib_levels(xs_high, xs_low)
-                    xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
+
+                    if nest_mode == "price":
+                        # 가격 레벨 기반 수학적 중첩 (Fractal Price Nesting)
+                        m_high, m_low = get_adjacent_l_levels(current_price, l_levels)
+                        m_levels = get_fib_levels(m_high, m_low)
+                        m_signal = get_entry_signal(current_price, m_levels, current_rsi)
+
+                        s_high, s_low = get_adjacent_l_levels(current_price, m_levels)
+                        s_levels = get_fib_levels(s_high, s_low)
+                        s_signal = get_entry_signal(current_price, s_levels, current_rsi)
+
+                        xs_high, xs_low = get_adjacent_l_levels(current_price, s_levels)
+                        xs_levels = get_fib_levels(xs_high, xs_low)
+                        xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
+                    else:
+                        # 기존 시간 주기 기반 중첩 (Time-based Multi-Timeframe)
+                        m_low_idx = df_m['Low'].idxmin()
+                        m_low    = float(df_m['Low'].min())
+                        m_high   = float(df_m.loc[m_low_idx:]['High'].max())
+                        m_levels = get_fib_levels(m_high, m_low)
+                        m_signal = get_entry_signal(current_price, m_levels, current_rsi)
+
+                        s_low_idx = df_s['Low'].idxmin()
+                        s_low    = float(df_s['Low'].min())
+                        s_high   = float(df_s.loc[s_low_idx:]['High'].max())
+                        s_levels = get_fib_levels(s_high, s_low)
+                        s_signal = get_entry_signal(current_price, s_levels, current_rsi)
+
+                        xs_low_idx = df_xs['Low'].idxmin()
+                        xs_low   = float(df_xs['Low'].min())
+                        xs_high  = float(df_xs.loc[xs_low_idx:]['High'].max())
+                        xs_levels = get_fib_levels(xs_high, xs_low)
+                        xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
+
+                    # T Size (Yesterday's Range)
+                    if len(df_all) >= 2:
+                        t_high = float(df_all['High'].iloc[-2])
+                        t_low = float(df_all['Low'].iloc[-2])
+                    else:
+                        t_high = float(df_all['High'].iloc[-1])
+                        t_low = float(df_all['Low'].iloc[-1])
+                    t_levels = get_fib_levels(t_high, t_low)
+                    t_signal = get_t_signal(current_price, t_levels, current_rsi)
 
                     signals = [l_signal, m_signal, s_signal, xs_signal]
                     composite_score = calculate_composite_score(signals, current_rsi, current_macd_hist, bb_pct, vol_ratio)
@@ -4706,6 +4822,12 @@ class FiboAnalyzerApp:
 | M (Nested L) | {fmt_price(m_high, rate, is_usd)} | {fmt_price(m_low, rate, is_usd)} | **{m_signal}** |
 | S (Nested M) | {fmt_price(s_high, rate, is_usd)} | {fmt_price(s_low, rate, is_usd)} | **{s_signal}** |
 | XS (Nested S) | {fmt_price(xs_high, rate, is_usd)} | {fmt_price(xs_low, rate, is_usd)} | **{xs_signal}** |
+| T (Yesterday) | {fmt_price(t_high, rate, is_usd)} | {fmt_price(t_low, rate, is_usd)} | **{t_signal}** |
+
+### 📊 T Size (Yesterday's Range) 상세 레벨
+| 피보나치 비율 | 레벨 구분 | 타겟 가격 | 현재가와의 이격 |
+| :--- | :--- | :--- | :--- |
+{make_fib_markdown_table(t_levels, current_price, rate, is_usd)}
 
 ---
 

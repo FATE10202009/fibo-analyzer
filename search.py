@@ -85,11 +85,11 @@ def search_ticker_by_name(query, market_opt="all"):
 
     # 1. 영문/숫자/기호로만 구성되어 있고 공백 없으면 티커로 간주 (즉시 반환)
     is_pure_ticker = (
-        all(c.isalnum() or c in ['-', '.', '='] for c in cleaned_query) 
+        all(c.isalnum() or c in ['-', '.', '=', ':'] for c in cleaned_query) 
         and cleaned_query.isascii()
     )
     if is_pure_ticker:
-        return cleaned_query
+        return cleaned_query.upper()
 
     # 2. 영문 검색어이면 yfinance로 바로 검색
     has_korean = any('\uAC00' <= c <= '\uD7A3' or '\u3131' <= c <= '\u314E' for c in cleaned_query)

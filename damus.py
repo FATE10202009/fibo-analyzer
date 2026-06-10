@@ -115,7 +115,31 @@ def get_damus_data(ticker, is_usd, interval='1h'):
         df_today_1h = df_1h[today_mask]
         df_prev_1h  = df_1h[prev_mask]
 
-        if len(df_today_1h) > 0:
+        # SOP (감자): 매시간마다 시가 기준선 생성. 미체크(가격 미돌파/미터치)된 건만 유지되며 여러 개가 존재할 수 있음.
+        active_sops = []
+        df_source = df_today_1h if len(df_today_1h) > 0 else df_1h.tail(24)
+        
+        import numpy as np
+        for idx_src, row_src in df_source.iterrows():
+            sop_val = float(row_src['Open'])
+            indices = np.where(df_1h.index == idx_src)[0]
+            if len(indices) > 0:
+                pos = int(indices[0])
+                checked = False
+                # 해당 시점 이후(pos+1부터 끝까지)의 봉들 중에서 이 시가(sop_val)를 터치/돌파했는지 판단
+                for j in range(pos + 1, len(df_1h)):
+                    low_j = float(df_1h['Low'].iloc[j])
+                    high_j = float(df_1h['High'].iloc[j])
+                    if low_j <= sop_val <= high_j:
+                        checked = True
+                        break
+                if not checked:
+                    active_sops.append((idx_src, sop_val))
+                    
+        # 호환성 유지를 위한 단일 sop 값 (가장 최신 미체크 SOP 또는 폴백)
+        if active_sops:
+            sop = active_sops[-1][1]
+        elif len(df_today_1h) > 0:
             sop = float(df_today_1h.iloc[0]['Open'])
         else:
             sop = float(df_1h.iloc[-1]['Open'])
@@ -229,6 +253,7 @@ def get_damus_data(ticker, is_usd, interval='1h'):
             'df_today_1h':     df_today_1h,
             'df_prev_1h':      df_prev_1h,
             'sop':             sop,
+            'active_sops':     active_sops,
             'r7':              r7,
             'r2':              r2,
             't7':              t7,
@@ -305,8 +330,19 @@ def generate_damus_chart(data):
             color='#E0E0E0', linewidth=1.5, marker='o', markersize=3, label=f'Price ({intv_label})')
 
     # ── SOP (감자) ───────────────────────────────────────────────
-    ax.axhline(y=sop, color='#00E676', linestyle='--', linewidth=1.4,
-               label=f'🥔 SOP {fmt_chart_val(sop, is_usd)}')
+    active_sops = data.get('active_sops', [])
+    if active_sops:
+        for idx, (t, s_val) in enumerate(active_sops):
+            lbl = f'🥔 SOP {fmt_chart_val(s_val, is_usd)}' if idx == 0 else ""
+            ax.axhline(y=s_val, color='#00E676', linestyle='--', linewidth=1.4, alpha=0.8,
+                       label=lbl)
+            # 차트 상에 생성 시간을 표시하여 구분하기 쉽게 함
+            time_str = t.strftime('%H:%M')
+            ax.text(start_time, s_val, f" 🥔 SOP ({time_str})", color='#00E676', fontsize=7, va='bottom', alpha=0.8)
+    else:
+        # 미체크 SOP가 없을 경우 기본 폴백 표시
+        ax.axhline(y=sop, color='#00E676', linestyle='--', linewidth=1.4, alpha=0.5,
+                   label=f'🥔 SOP(기본) {fmt_chart_val(sop, is_usd)}')
 
     # ── Y7/Y2 (전일 고/저) ───────────────────────────────────────
     ax.axhline(y=y7, color='#FFA726', linestyle=':', linewidth=1.0, alpha=0.8,
@@ -444,6 +480,7 @@ def generate_damus_report_md(data, rate):
     def p(v):
         return fmt_price(v, rate, is_usd)
 
+    active_sops = data.get('active_sops', [])
     diff_sop = ((cp / sop) - 1) * 100
     sop_status = "**🟢 SOP 상회 (강세)**" if cp > sop else "**🔴 SOP 하회 (약세)**"
 
@@ -459,7 +496,14 @@ def generate_damus_report_md(data, rate):
     md.append(f"| 항목 | 값 | 판단 |")
     md.append(f"| :--- | :--- | :--- |")
     md.append(f"| **현재 가격** | {p(cp)} | — |")
-    md.append(f"| **SOP (감자, 당일 첫봉 시가)** | {p(sop)} | 현재가 SOP {sop_status} ({diff_sop:+.2f}%) |")
+    if active_sops:
+        for t, s_val in active_sops:
+            diff_s = ((cp / s_val) - 1) * 100
+            s_status = "**🟢 SOP 상회 (강세)**" if cp > s_val else "**🔴 SOP 하회 (약세)**"
+            time_str = t.strftime('%m-%d %H:%M')
+            md.append(f"| **SOP ({time_str})** | {p(s_val)} | 현재가 대비 {s_status} ({diff_s:+.2f}%) |")
+    else:
+        md.append(f"| **SOP (감자, 기본)** | {p(sop)} | 현재가 대비 {sop_status} ({diff_sop:+.2f}%) |")
 
     # 당일 고/저 vs 전일 비교
     if t7 > y7:
@@ -478,9 +522,16 @@ def generate_damus_report_md(data, rate):
 
     # ── SOP 기준 상세 ─────────────────────────────────────────────
     md.append("### 1) 핵심 기준선 — SOP (감자)\n")
-    md.append(f"* **SOP**: **{p(sop)}** — 당일 최초 1시간봉 시가, 하루 종일 고정되는 단기 기준선")
-    md.append(f"* 현재 가격 {p(cp)} 은 SOP를 {sop_status} ({diff_sop:+.2f}%)")
-    md.append(f"  - *SOP 상회 → 매수 우위, SOP 하회 → 매도 우위로 단기 방향성을 판단합니다.*\n")
+    if active_sops:
+        md.append(f"* 현재 **{len(active_sops)}개**의 미체크 SOP가 활성화되어 있습니다 (매 정각 시가 형성 후 미돌파 상태):\n")
+        for t, s_val in active_sops:
+            diff_s = ((cp / s_val) - 1) * 100
+            s_status = "상회 (강세)" if cp > s_val else "하회 (약세)"
+            time_str = t.strftime('%m-%d %H:%M')
+            md.append(f"  - **SOP ({time_str})**: **{p(s_val)}** — 현재가 대비 {s_status} ({diff_s:+.2f}%)")
+        md.append("  - *SOP 상회 → 매수 우위, SOP 하회 → 매도 우위로 판단합니다. 가격이 이 레벨을 터치(돌파)하면 해당 SOP는 목록에서 즉시 제거됩니다.*\n")
+    else:
+        md.append(f"* **SOP (기본)**: **{p(sop)}** — 현재 활성 미체크 SOP가 없어 최근 시가를 기준으로 표시합니다. 현재가 대비 {sop_status} ({diff_sop:+.2f}%)")
 
     # ── 파동 목표값 ───────────────────────────────────────────────
     md.append("### 2) 파동별 목표값 (R → T → Y)\n")
