@@ -1055,8 +1055,8 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
     )
     future_outlook_md = generate_future_outlook(ticker, info, rate)
     
-    # 뉴스 영향 마크다운 및 AI 분석 수집 (사용자 API 키 전달)
-    news_impact_md, ai_result = generate_news_impact_md(ticker, news_list, api_key=api_key)
+    # 뉴스 영향 분석 제외
+    news_impact_md = ""
 
     # Damus 레벨 연산
     damus_data = get_damus_data(ticker, is_usd, "1d")
@@ -1129,11 +1129,7 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 
 {future_outlook_md}
 
----
 
-{news_impact_md}
-
----
 *본 리포트는 기술적 분석 보조지표를 바탕으로 자동 생성된 정보이며, 투자 참고용으로만 사용하시기 바랍니다.*
 """
 
