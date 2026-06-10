@@ -46,8 +46,8 @@ class VirtualTradingManager:
                     with open(file_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
                         # 스키마 호환성 보장
-                        data.setdefault("usd_cash", 100000.0)
-                        data.setdefault("krw_cash", 100000000.0)
+                        data.setdefault("usd_cash", 100000000.0)
+                        data.setdefault("krw_cash", 10000000000.0)
                         data.setdefault("portfolio", {})
                         data.setdefault("history", [])
                         data.setdefault("limit_orders", [])
@@ -57,8 +57,8 @@ class VirtualTradingManager:
             
             # 파일이 없거나 오류 발생 시 기본값 반환 및 저장
             default_data = {
-                "usd_cash": 100000.0,
-                "krw_cash": 100000000.0,
+                "usd_cash": 100000000.0,
+                "krw_cash": 10000000000.0,
                 "portfolio": {},
                 "history": [],
                 "limit_orders": []
@@ -84,8 +84,8 @@ class VirtualTradingManager:
 
     def reset_user_data(self, user_id):
         default_data = {
-            "usd_cash": 100000.0,
-            "krw_cash": 100000000.0,
+            "usd_cash": 100000000.0,
+            "krw_cash": 10000000000.0,
             "portfolio": {},
             "history": [],
             "limit_orders": []
