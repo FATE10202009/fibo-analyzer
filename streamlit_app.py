@@ -25,10 +25,15 @@ from damus import get_damus_data, generate_damus_report_md
 from ai_analyzer import ask_gemini_qna
 from notifier import alert_manager
 import google_finance as gf
+from virtual_trading import virtual_trading_manager
 
 # 텔레그램 목표가 모니터링 스레드 가동
 if not alert_manager.running:
     alert_manager.start_monitor()
+
+# 가상 매매 24시간 매칭 엔진 가동
+virtual_trading_manager.start_matching_engine()
+
 
 # ────────────────────────────────────────────────────────────
 # Page Configuration & Rich CSS Styling
@@ -275,115 +280,11 @@ def get_marquee_prices(favorites, data_source="google"):
 # 지정가 매수/매도 감시 및 체결 핵심 엔진 (Mock Limit Order Engine)
 # ────────────────────────────────────────────────────────────
 def process_limit_orders(current_ticker=None, current_price=None):
-    if "virtual_limit_orders" not in st.session_state or not st.session_state.virtual_limit_orders:
-        return
-        
-    remaining_orders = []
-    executed_any = False
-    
-    for order in st.session_state.virtual_limit_orders:
-        ticker = order["ticker"]
-        order_type = order["type"]
-        target_price = order["target_price"]
-        qty = order["qty"]
-        amount = order["amount"]
-        is_usd = order["is_usd"]
-        
-        price = None
-        if ticker == current_ticker and current_price is not None:
-            price = current_price
-        else:
-            try:
-                import yfinance as yf
-                t_obj = yf.Ticker(ticker)
-                if hasattr(t_obj, 'fast_info') and 'lastPrice' in t_obj.fast_info:
-                    price = float(t_obj.fast_info['lastPrice'])
-                else:
-                    hist = t_obj.history(period="1d")
-                    if not hist.empty:
-                        price = float(hist['Close'].iloc[-1])
-            except Exception as e:
-                print(f"[Limit Order Error] 가격 조회 실패 ({ticker}): {e}")
-                
-        if price is None:
-            remaining_orders.append(order)
-            continue
-            
-        triggered = False
-        if order_type == "지정가 매수 (LIMIT BUY)" and price <= target_price:
-            triggered = True
-            expected_qty = amount / price
-            
-            # 현금 차감
-            if is_usd:
-                st.session_state.virtual_usd_cash -= amount
-            else:
-                st.session_state.virtual_krw_cash -= amount
-            
-            # 포트폴리오 갱신
-            holding = st.session_state.virtual_portfolio.get(ticker, {"qty": 0.0, "avg_price": 0.0, "is_usd": is_usd})
-            new_qty = holding["qty"] + expected_qty
-            new_avg = ((holding["qty"] * holding["avg_price"]) + amount) / new_qty if new_qty > 0 else 0.0
-            st.session_state.virtual_portfolio[ticker] = {
-                "qty": new_qty,
-                "avg_price": new_avg,
-                "is_usd": is_usd
-            }
-            
-            # 이력 기록
-            import datetime
-            st.session_state.virtual_history.append({
-                "time": datetime.datetime.now().strftime("%m-%d %H:%M:%S"),
-                "ticker": ticker,
-                "type": "지정가 매수 체결",
-                "price": price,
-                "qty": expected_qty,
-                "amount": amount,
-                "currency": "$" if is_usd else "₩"
-            })
-            st.toast(f"🔔 지정가 매수 체결 완료: {ticker} @ {price:,.2f}", icon="🎉")
-            executed_any = True
-            
-        elif order_type == "지정가 매도 (LIMIT SELL)" and price >= target_price:
-            holding = st.session_state.virtual_portfolio.get(ticker, {"qty": 0.0, "avg_price": 0.0, "is_usd": is_usd})
-            if holding["qty"] >= qty:
-                triggered = True
-                recv_amount = qty * price
-                new_qty = holding["qty"] - qty
-                if new_qty <= 0.0001:
-                    st.session_state.virtual_portfolio.pop(ticker, None)
-                else:
-                    st.session_state.virtual_portfolio[ticker] = {
-                        "qty": new_qty,
-                        "avg_price": holding["avg_price"],
-                        "is_usd": is_usd
-                    }
-                # 현금 증가
-                if is_usd:
-                    st.session_state.virtual_usd_cash += recv_amount
-                else:
-                    st.session_state.virtual_krw_cash += recv_amount
-                
-                # 이력 기록
-                import datetime
-                st.session_state.virtual_history.append({
-                    "time": datetime.datetime.now().strftime("%m-%d %H:%M:%S"),
-                    "ticker": ticker,
-                    "type": "지정가 매도 체결",
-                    "price": price,
-                    "qty": qty,
-                    "amount": recv_amount,
-                    "currency": "$" if is_usd else "₩"
-                })
-                st.toast(f"🔔 지정가 매도 체결 완료: {ticker} @ {price:,.2f}", icon="🎉")
-                executed_any = True
-                
-        if not triggered:
-            remaining_orders.append(order)
-            
-    st.session_state.virtual_limit_orders = remaining_orders
-    if executed_any:
-        st.rerun()
+    # 백그라운드 스레드 외에도, 사용자 웹 렌더링 시 즉각적으로 체결 여부를 판단하여 반응성을 높입니다.
+    try:
+        virtual_trading_manager.process_all_users()
+    except Exception as e:
+        print(f"[Limit Order Process Error] {e}")
 
 
 # ────────────────────────────────────────────────────────────
@@ -401,17 +302,13 @@ if "messages" not in st.session_state:
 if "last_analyzed_ticker" not in st.session_state:
     st.session_state.last_analyzed_ticker = ""
 
-# 가상 매매(모의 투자) 세션 상태 초기화
-if "virtual_usd_cash" not in st.session_state:
-    st.session_state.virtual_usd_cash = 100000.0  # $100,000 USD
-if "virtual_krw_cash" not in st.session_state:
-    st.session_state.virtual_krw_cash = 100000000.0  # ₩100,000,000 KRW
-if "virtual_portfolio" not in st.session_state:
-    st.session_state.virtual_portfolio = {}  # {ticker: {"qty": qty, "avg_price": avg_price, "is_usd": is_usd}}
-if "virtual_history" not in st.session_state:
-    st.session_state.virtual_history = []  # [{"time": time, "ticker": ticker, "type": type, "price": price, "qty": qty, "amount": amount, "currency": currency}]
-if "virtual_limit_orders" not in st.session_state:
-    st.session_state.virtual_limit_orders = []
+# 가상 매매(모의 투자) 사용자 ID 초기화
+if "virtual_user_id" not in st.session_state:
+    if "user" in st.query_params:
+        st.session_state.virtual_user_id = st.query_params["user"]
+    else:
+        st.session_state.virtual_user_id = "guest"
+
 
 # ────────────────────────────────────────────────────────────
 # Sidebar & User inputs
@@ -1414,6 +1311,33 @@ with main_container:
             st.markdown("### 💸 실시간 가상 매매 (Paper Trading)")
             st.markdown("현재 선택된 자산의 실시간 시세를 기준으로 모의 주문을 실행하고 모니터링할 수 있습니다.")
             
+            # 사용자 닉네임 입력 추가
+            col_user1, col_user2 = st.columns([0.6, 0.4], vertical_alignment="center")
+            with col_user1:
+                user_id_input = st.text_input(
+                    "👤 가상 매매 고유 닉네임 입력 (영문/숫자/하이픈만 가능)", 
+                    value=st.session_state.virtual_user_id, 
+                    key="virtual_user_id_input_widget",
+                    help="나만의 고유한 닉네임을 설정하면 컴퓨터를 꺼두어도 주문이 유지되며, 재접속 시 이전 내역이 그대로 복구됩니다."
+                )
+            with col_user2:
+                st.caption("💡 고유 닉네임을 사용하면 여러 사람이 동일한 서버를 사용해도 지갑 정보가 분리되어 안전하게 보존됩니다.")
+
+            # 입력한 닉네임 세션 및 URL 파라미터 동기화
+            if user_id_input != st.session_state.virtual_user_id:
+                st.session_state.virtual_user_id = user_id_input
+                st.query_params["user"] = user_id_input
+                st.rerun()
+
+            trading_user_id = st.session_state.virtual_user_id
+            user_data = virtual_trading_manager.load_user_data(trading_user_id)
+
+            usd_cash = user_data["usd_cash"]
+            krw_cash = user_data["krw_cash"]
+            portfolio = user_data["portfolio"]
+            history = user_data["history"]
+            limit_orders = user_data["limit_orders"]
+
             trading_ticker = results['ticker']
             is_usd = results['is_usd']
             current_price = results['current_price']
@@ -1422,12 +1346,11 @@ with main_container:
             # 보유 현금량
             col_cash_usd, col_cash_krw = st.columns(2)
             with col_cash_usd:
-                st.metric("💵 가상 USD 잔액", f"${st.session_state.virtual_usd_cash:,.2f}")
+                st.metric("💵 가상 USD 잔액", f"${usd_cash:,.2f}")
             with col_cash_krw:
-                st.metric("💵 가상 KRW 잔액", f"₩{st.session_state.virtual_krw_cash:,.0f}")
+                st.metric("💵 가상 KRW 잔액", f"₩{krw_cash:,.0f}")
                 
             # 포트폴리오 보유 현황
-            portfolio = st.session_state.virtual_portfolio
             holding = portfolio.get(trading_ticker, {"qty": 0.0, "avg_price": 0.0, "is_usd": is_usd})
             holding_qty = holding["qty"]
             holding_avg = holding["avg_price"]
@@ -1462,7 +1385,7 @@ with main_container:
             
             with col_buy:
                 st.markdown("**🟢 가상 매수 (BUY)**")
-                max_cash = st.session_state.virtual_usd_cash if is_usd else st.session_state.virtual_krw_cash
+                max_cash = usd_cash if is_usd else krw_cash
                 
                 if order_type == "지정가 (예약 체결)":
                     limit_buy_price = st.number_input("지정가 매수 목표가 입력", min_value=0.0, value=current_price, step=current_price/100, key="limit_buy_price_input")
@@ -1478,17 +1401,12 @@ with main_container:
                         elif buy_amount > max_cash:
                             st.error("잔액이 부족합니다.")
                         else:
-                            st.session_state.virtual_limit_orders.append({
-                                "id": str(datetime.datetime.now().timestamp()),
-                                "ticker": trading_ticker,
-                                "type": "지정가 매수 (LIMIT BUY)",
-                                "target_price": limit_buy_price,
-                                "qty": expected_qty,
-                                "amount": buy_amount,
-                                "is_usd": is_usd
-                            })
-                            st.success(f"📌 {trading_ticker} @ {currency}{limit_buy_price:,.2f} 지정가 매수 예약이 완료되었습니다!")
-                            st.rerun()
+                            success, msg = virtual_trading_manager.add_limit_buy(trading_user_id, trading_ticker, limit_buy_price, buy_amount, is_usd)
+                            if success:
+                                st.success(msg)
+                                st.rerun()
+                            else:
+                                st.error(msg)
                 else:
                     buy_amount = st.number_input("매수할 금액 입력", min_value=0.0, max_value=float(max_cash), value=0.0, step=100.0 if is_usd else 100000.0, key="buy_amount_input_market")
                     expected_qty = buy_amount / current_price if current_price > 0 else 0.0
@@ -1500,31 +1418,12 @@ with main_container:
                         elif buy_amount > max_cash:
                             st.error("잔액이 부족합니다.")
                         else:
-                            if is_usd:
-                                st.session_state.virtual_usd_cash -= buy_amount
+                            success, msg = virtual_trading_manager.execute_market_buy(trading_user_id, trading_ticker, buy_amount, current_price, is_usd)
+                            if success:
+                                st.success(msg)
+                                st.rerun()
                             else:
-                                st.session_state.virtual_krw_cash -= buy_amount
-                                
-                            new_qty = holding_qty + expected_qty
-                            new_avg = ((holding_qty * holding_avg) + buy_amount) / new_qty if new_qty > 0 else 0.0
-                            st.session_state.virtual_portfolio[trading_ticker] = {
-                                "qty": new_qty,
-                                "avg_price": new_avg,
-                                "is_usd": is_usd
-                            }
-                            
-                            import datetime
-                            st.session_state.virtual_history.append({
-                                "time": datetime.datetime.now().strftime("%m-%d %H:%M:%S"),
-                                "ticker": trading_ticker,
-                                "type": "시장가 매수",
-                                "price": current_price,
-                                "qty": expected_qty,
-                                "amount": buy_amount,
-                                "currency": currency
-                            })
-                            st.success(f"🎉 {trading_ticker} {expected_qty:,.4f}개 시장가 매수 완료!")
-                            st.rerun()
+                                st.error(msg)
                         
             with col_sell:
                 st.markdown("**🔴 가상 매도 (SELL)**")
@@ -1543,17 +1442,12 @@ with main_container:
                         elif sell_qty > holding_qty:
                             st.error("보유 수량보다 많습니다.")
                         else:
-                            st.session_state.virtual_limit_orders.append({
-                                "id": str(datetime.datetime.now().timestamp()),
-                                "ticker": trading_ticker,
-                                "type": "지정가 매도 (LIMIT SELL)",
-                                "target_price": limit_sell_price,
-                                "qty": sell_qty,
-                                "amount": expected_recv,
-                                "is_usd": is_usd
-                            })
-                            st.success(f"📌 {trading_ticker} @ {currency}{limit_sell_price:,.2f} 지정가 매도 예약이 완료되었습니다!")
-                            st.rerun()
+                            success, msg = virtual_trading_manager.add_limit_sell(trading_user_id, trading_ticker, limit_sell_price, sell_qty, is_usd)
+                            if success:
+                                st.success(msg)
+                                st.rerun()
+                            else:
+                                st.error(msg)
                 else:
                     sell_qty = st.number_input("매도할 수량 입력", min_value=0.0, max_value=float(holding_qty), value=0.0, step=holding_qty/10 if holding_qty > 0 else 0.1, key="sell_qty_input_market")
                     expected_recv = sell_qty * current_price
@@ -1565,37 +1459,15 @@ with main_container:
                         elif sell_qty > holding_qty:
                             st.error("보유 수량보다 많습니다.")
                         else:
-                            new_qty = holding_qty - sell_qty
-                            if new_qty <= 0.0001:
-                                st.session_state.virtual_portfolio.pop(trading_ticker, None)
+                            success, msg = virtual_trading_manager.execute_market_sell(trading_user_id, trading_ticker, sell_qty, current_price, is_usd)
+                            if success:
+                                st.success(msg)
+                                st.rerun()
                             else:
-                                st.session_state.virtual_portfolio[trading_ticker] = {
-                                    "qty": new_qty,
-                                    "avg_price": holding_avg,
-                                    "is_usd": is_usd
-                                }
-                                
-                            if is_usd:
-                                st.session_state.virtual_usd_cash += expected_recv
-                            else:
-                                st.session_state.virtual_krw_cash += expected_recv
-                                
-                            import datetime
-                            st.session_state.virtual_history.append({
-                                "time": datetime.datetime.now().strftime("%m-%d %H:%M:%S"),
-                                "ticker": trading_ticker,
-                                "type": "시장가 매도",
-                                "price": current_price,
-                                "qty": sell_qty,
-                                "amount": expected_recv,
-                                "currency": currency
-                            })
-                            st.success(f"🎉 {trading_ticker} {sell_qty:,.4f}개 시장가 매도 완료!")
-                            st.rerun()
+                                st.error(msg)
                             
             # ⏳ 대기 중인 지정가 주문 목록
             st.markdown("#### ⏳ 대기 중인 지정가 주문 목록")
-            limit_orders = st.session_state.virtual_limit_orders
             if not limit_orders:
                 st.caption("대기 중인 지정가 주문이 없습니다.")
             else:
@@ -1608,25 +1480,24 @@ with main_container:
                         st.caption(f"대기 중...")
                     with col_o3:
                         if st.button("취소 ❌", key=f"cancel_order_{order['id']}_{idx}", use_container_width=True):
-                            st.session_state.virtual_limit_orders.pop(idx)
-                            st.toast("지정가 주문이 취소되었습니다.", icon="❌")
-                            st.rerun()
+                            success, msg = virtual_trading_manager.cancel_limit_order(trading_user_id, order["id"])
+                            if success:
+                                st.toast(msg, icon="❌")
+                                st.rerun()
+                            else:
+                                st.error(msg)
                         
             # 매매 이력 로그
             st.markdown("#### 📜 가상 거래 내역")
-            if st.session_state.virtual_history:
+            if history:
                 import pandas as pd
-                history_df = pd.DataFrame(st.session_state.virtual_history[::-1])
+                history_df = pd.DataFrame(history[::-1])
                 st.dataframe(history_df, use_container_width=True)
             else:
                 st.info("거래 이력이 없습니다.")
                 
             if st.button("🔄 가상 계좌 초기화 (자산 리셋)", key="reset_virtual_trading_btn"):
-                st.session_state.virtual_usd_cash = 100000.0
-                st.session_state.virtual_krw_cash = 100000000.0
-                st.session_state.virtual_portfolio = {}
-                st.session_state.virtual_history = []
-                st.session_state.virtual_limit_orders = []
+                virtual_trading_manager.reset_user_data(trading_user_id)
                 st.toast("가상 계좌가 초기 상태로 재설정되었습니다!", icon="🔄")
                 st.rerun()
 
