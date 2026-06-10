@@ -158,16 +158,9 @@ def load_favorites():
     return cleaned_favs
 
 def save_favorites(favs):
-    # 저장할 때도 정제된 리스트로 저장
-    cleaned_favs = []
-    for name, val in favs:
-        cleaned_name = name.split(" ")[0].upper()
-        cleaned_favs.append((cleaned_name, val.upper()))
-    try:
-        with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
-            json.dump(cleaned_favs, f, ensure_ascii=False, indent=4)
-    except:
-        pass
+    # [2번 방식] 서버 파일에 저장하지 않고, 사용자 개별 브라우저 세션(st.session_state)에서만
+    # 독립적으로 즐겨찾기를 사용하게 하기 위해 파일 저장을 비활성화합니다.
+    pass
 
 # AI 추천 자산 정의
 AI_RECOMMENDED = [
