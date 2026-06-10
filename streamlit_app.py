@@ -537,6 +537,15 @@ with st.sidebar:
                     st.rerun()
 
 
+
+    st.write("---")
+    st.subheader("⚙️ 화면 설정")
+    show_virtual_trading = st.toggle(
+        "💸 실시간 가상 매매 패널 표시", 
+        value=True, 
+        key="show_virtual_trading_toggle",
+        help="체크 해제 시 가상 매매 사이드 패널을 숨기고 분석 리포트를 넓게 볼 수 있습니다."
+    )
 # ────────────────────────────────────────────────────────────
 # 자산 전환에 따른 채팅 내역 초기화 (React DOM NotFoundError 방지 핵심)
 # ────────────────────────────────────────────────────────────
@@ -1232,7 +1241,10 @@ with main_container:
         # ────────────────────────────────────────────────────────────
         # 1. 4구역 KPI 핵심 카드 섹션
         # ────────────────────────────────────────────────────────────
-        left_col, right_col = st.columns([0.62, 0.38], gap="medium")
+        if show_virtual_trading:
+            left_col, right_col = st.columns([0.62, 0.38], gap="medium")
+        else:
+            left_col = st.container()
         
         with left_col:
             col1, col2, col3, col4 = st.columns(4)
@@ -1276,25 +1288,31 @@ with main_container:
             # ────────────────────────────────────────────────────────────
             # 2. Plotly 인터랙티브 차트 시각화 섹션 (탭 적용)
             # ────────────────────────────────────────────────────────────
-            st.subheader("📈 멀티 타임프레임 차트 및 피보나치 작도 (마우스 오버 가격 확인)")
+            st.subheader("📈 멀티 타임프레임 차트 및 피보나치 작도")
             
-            # 탭 렌더링 (RSI 14, MACD, Damus, 및 가상 매매 탭 추가)
-            tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+            # 가로형 라디오 탭 셀렉션 (모바일 줌 버그 극복을 위한 조건부 remount 렌더링)
+            chart_options = [
                 "🌐 All-Time (L)", "📅 180일 스윙 (M)", "📆 30일 단기 (S)", "⏰ 7일 초단기 (XS)", "💜 RSI 14", "💛 MACD", "🥔 Damus 알고리즘"
-            ])
+            ]
+            active_chart_tab = st.radio(
+                "차트 선택",
+                options=chart_options,
+                horizontal=True,
+                label_visibility="collapsed",
+                key=f"chart_tab_selector_{results['ticker']}"
+            )
             
-            # L Size 차트 연산 및 렌더링
-            with tab1:
+            # 활성화된 탭의 차트만 단독 렌더링하여 탭 전환 시 줌이 강제 초기화(원복)되도록 처리
+            if active_chart_tab == "🌐 All-Time (L)":
                 fig_l = create_plotly_candlestick_chart(
                     df=results['df_all'].copy(),
                     title=f"L Size: All-Time / 고점: {fmt_chart_val(results['l_high'], results['is_usd'])} / 저점: {fmt_chart_val(results['l_low'], results['is_usd'])}",
                     fib_levels=results['l_levels'],
                     is_usd=results['is_usd']
                 )
-                st.plotly_chart(fig_l, use_container_width=True, key="plotly_chart_l_size")
+                st.plotly_chart(fig_l, use_container_width=True, key=f"plotly_chart_l_size_{results['ticker']}")
                 
-            # M Size 차트 연산 및 렌더링
-            with tab2:
+            elif active_chart_tab == "📅 180일 스윙 (M)":
                 fig_m = create_plotly_candlestick_chart(
                     df=results['df_m'],
                     title=f"M Size: Nested in L (최근 180봉) / 고점: {fmt_chart_val(results['m_high'], results['is_usd'])} / 저점: {fmt_chart_val(results['m_low'], results['is_usd'])}",
@@ -1303,10 +1321,9 @@ with main_container:
                     bb_cols=['BB_Upper', 'BB_Lower'],
                     is_usd=results['is_usd']
                 )
-                st.plotly_chart(fig_m, use_container_width=True, key="plotly_chart_m_size")
+                st.plotly_chart(fig_m, use_container_width=True, key=f"plotly_chart_m_size_{results['ticker']}")
                 
-            # S Size 차트 연산 및 렌더링
-            with tab3:
+            elif active_chart_tab == "📆 30일 단기 (S)":
                 fig_s = create_plotly_candlestick_chart(
                     df=results['df_s'],
                     title=f"S Size: Nested in M (최근 30봉) / 고점: {fmt_chart_val(results['s_high'], results['is_usd'])} / 저점: {fmt_chart_val(results['s_low'], results['is_usd'])}",
@@ -1314,38 +1331,32 @@ with main_container:
                     sma_cols=['SMA_5', 'SMA_20'],
                     is_usd=results['is_usd']
                 )
-                st.plotly_chart(fig_s, use_container_width=True, key="plotly_chart_s_size")
+                st.plotly_chart(fig_s, use_container_width=True, key=f"plotly_chart_s_size_{results['ticker']}")
                 
-            # XS Size 차트 연산 및 렌더링
-            with tab4:
+            elif active_chart_tab == "⏰ 7일 초단기 (XS)":
                 fig_xs = create_plotly_candlestick_chart(
                     df=results['df_xs'],
                     title=f"XS Size: Nested in S (최근 14봉) / 고점: {fmt_chart_val(results['xs_high'], results['is_usd'])} / 저점: {fmt_chart_val(results['xs_low'], results['is_usd'])}",
                     fib_levels=results['xs_levels'],
                     is_usd=results['is_usd']
                 )
-                st.plotly_chart(fig_xs, use_container_width=True, key="plotly_chart_xs_size")
+                st.plotly_chart(fig_xs, use_container_width=True, key=f"plotly_chart_xs_size_{results['ticker']}")
                 
-            # RSI 14 Plotly 차트 렌더링
-            with tab5:
+            elif active_chart_tab == "💜 RSI 14":
                 fig_rsi = create_plotly_rsi_chart(results['df_m'])
-                st.plotly_chart(fig_rsi, use_container_width=True, key="plotly_chart_rsi_14")
+                st.plotly_chart(fig_rsi, use_container_width=True, key=f"plotly_chart_rsi_14_{results['ticker']}")
                 
-            # MACD Plotly 차트 렌더링
-            with tab6:
+            elif active_chart_tab == "💛 MACD":
                 fig_macd = create_plotly_macd_chart(results['df_m'])
-                st.plotly_chart(fig_macd, use_container_width=True, key="plotly_chart_macd")
+                st.plotly_chart(fig_macd, use_container_width=True, key=f"plotly_chart_macd_{results['ticker']}")
                 
-            # Damus 알고리즘 시각화
-            with tab7:
+            elif active_chart_tab == "🥔 Damus 알고리즘":
                 if results['damus_data']:
                     from damus import generate_damus_chart
                     fig_damus = generate_damus_chart(results['damus_data'])
-                    st.plotly_chart(fig_damus, use_container_width=True, key="plotly_chart_damus_alg")
+                    st.plotly_chart(fig_damus, use_container_width=True, key=f"plotly_chart_damus_alg_{results['ticker']}")
                 else:
                     st.info("Damus 데이터를 생성할 수 없습니다.")
-    
-            # 가상 매매 탭 렌더링
             st.write("---")
             st.subheader("📑 피보나치 중첩 분석 종합 보고서")
             st.markdown(results['report_markdown'], unsafe_allow_html=True)
@@ -1406,290 +1417,292 @@ with main_container:
                     st.session_state.messages.append({"role": "assistant", "content": answer})
 
 
-        with right_col:
-            # 💸 실시간 가상 매매 (Mock Trading) 패널 상시 노출
-            st.markdown("""
-            <div style="background: rgba(30, 30, 40, 0.45); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);">
-                <h3 style="color:#60A5FA; margin-top:0px; margin-bottom:5px; font-size: 20px;">💸 실시간 가상 매매 (Mock Trading)</h3>
-                <p style="color:#94A3B8; font-size:12px; margin-bottom:0px;">포트폴리오 통합 조회 및 원클릭 매매 패널</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # 사용자 닉네임 입력 추가
-            user_id_input = st.text_input(
-                "👤 가상 매매 고유 닉네임 (영문/숫자/하이픈)", 
-                value=st.session_state.virtual_user_id, 
-                key="virtual_user_id_input_widget",
-                help="나만의 고유한 닉네임을 설정하면 컴퓨터를 꺼두어도 주문이 유지되며, 재접속 시 이전 내역이 그대로 복구됩니다."
-            )
 
-            # 입력한 닉네임 세션 및 URL 파라미터 동기화
-            if user_id_input != st.session_state.virtual_user_id:
-                st.session_state.virtual_user_id = user_id_input
-                st.query_params["user"] = user_id_input
-                # 로컬 파일에 마지막 닉네임 저장
-                try:
-                    with open(LAST_USER_FILE, "w", encoding="utf-8") as f:
-                        f.write(user_id_input)
-                except Exception as e:
-                    print(f"[Last User Save Error] {e}")
-                st.rerun()
-
-            trading_user_id = st.session_state.virtual_user_id
-            user_data = virtual_trading_manager.load_user_data(trading_user_id)
-
-            usd_cash = user_data["usd_cash"]
-            krw_cash = user_data["krw_cash"]
-            portfolio = user_data["portfolio"]
-            history = user_data["history"]
-            limit_orders = user_data["limit_orders"]
-
-            # 보유 현금량 정보 표시
-            col_cash1, col_cash2 = st.columns(2)
-            col_cash1.metric("💵 가상 USD 잔액", f"${usd_cash:,.2f}")
-            col_cash2.metric("💵 가상 KRW 잔액", f"₩{krw_cash:,.0f}")
-
-            # 📦 종합 보유 자산 현황
-            st.markdown("#### 📦 종합 보유 자산 현황")
-            if not portfolio:
-                st.info("현재 보유 중인 가상 자산이 없습니다.")
-            else:
-                portfolio_rows = []
-                for held_ticker, holding_item in portfolio.items():
-                    qty = holding_item["qty"]
-                    avg_p = holding_item["avg_price"]
-                    held_is_usd = holding_item.get("is_usd", True)
-                    
-                    cur_p = get_current_price_cached(held_ticker)
-                    if cur_p is None:
-                        cur_p = avg_p # fallback
+        if show_virtual_trading:
+            with right_col:
+                # 💸 실시간 가상 매매 (Mock Trading) 패널 상시 노출
+                st.markdown("""
+                <div style="background: rgba(30, 30, 40, 0.45); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);">
+                    <h3 style="color:#60A5FA; margin-top:0px; margin-bottom:5px; font-size: 20px;">💸 실시간 가상 매매 (Mock Trading)</h3>
+                    <p style="color:#94A3B8; font-size:12px; margin-bottom:0px;">포트폴리오 통합 조회 및 원클릭 매매 패널</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # 사용자 닉네임 입력 추가
+                user_id_input = st.text_input(
+                    "👤 가상 매매 고유 닉네임 (영문/숫자/하이픈)", 
+                    value=st.session_state.virtual_user_id, 
+                    key="virtual_user_id_input_widget",
+                    help="나만의 고유한 닉네임을 설정하면 컴퓨터를 꺼두어도 주문이 유지되며, 재접속 시 이전 내역이 그대로 복구됩니다."
+                )
+    
+                # 입력한 닉네임 세션 및 URL 파라미터 동기화
+                if user_id_input != st.session_state.virtual_user_id:
+                    st.session_state.virtual_user_id = user_id_input
+                    st.query_params["user"] = user_id_input
+                    # 로컬 파일에 마지막 닉네임 저장
+                    try:
+                        with open(LAST_USER_FILE, "w", encoding="utf-8") as f:
+                            f.write(user_id_input)
+                    except Exception as e:
+                        print(f"[Last User Save Error] {e}")
+                    st.rerun()
+    
+                trading_user_id = st.session_state.virtual_user_id
+                user_data = virtual_trading_manager.load_user_data(trading_user_id)
+    
+                usd_cash = user_data["usd_cash"]
+                krw_cash = user_data["krw_cash"]
+                portfolio = user_data["portfolio"]
+                history = user_data["history"]
+                limit_orders = user_data["limit_orders"]
+    
+                # 보유 현금량 정보 표시
+                col_cash1, col_cash2 = st.columns(2)
+                col_cash1.metric("💵 가상 USD 잔액", f"${usd_cash:,.2f}")
+                col_cash2.metric("💵 가상 KRW 잔액", f"₩{krw_cash:,.0f}")
+    
+                # 📦 종합 보유 자산 현황
+                st.markdown("#### 📦 종합 보유 자산 현황")
+                if not portfolio:
+                    st.info("현재 보유 중인 가상 자산이 없습니다.")
+                else:
+                    portfolio_rows = []
+                    for held_ticker, holding_item in portfolio.items():
+                        qty = holding_item["qty"]
+                        avg_p = holding_item["avg_price"]
+                        held_is_usd = holding_item.get("is_usd", True)
                         
-                    buy_amt = qty * avg_p
-                    val_amt = qty * cur_p
-                    pnl_amt = val_amt - buy_amt
-                    pct = (pnl_amt / buy_amt * 100) if buy_amt > 0 else 0.0
+                        cur_p = get_current_price_cached(held_ticker)
+                        if cur_p is None:
+                            cur_p = avg_p # fallback
+                            
+                        buy_amt = qty * avg_p
+                        val_amt = qty * cur_p
+                        pnl_amt = val_amt - buy_amt
+                        pct = (pnl_amt / buy_amt * 100) if buy_amt > 0 else 0.0
+                        
+                        symbol = "$" if held_is_usd else "₩"
+                        
+                        portfolio_rows.append({
+                            "자산": held_ticker,
+                            "보유 수량": f"{qty:,.4f}",
+                            "매수 평단": f"{symbol}{avg_p:,.2f}" if held_is_usd else f"{symbol}{avg_p:,.0f}",
+                            "현재가": f"{symbol}{cur_p:,.2f}" if held_is_usd else f"{symbol}{cur_p:,.0f}",
+                            "평가 금액": f"{symbol}{val_amt:,.2f}" if held_is_usd else f"{symbol}{val_amt:,.0f}",
+                            "평가 손익 (수익률)": f"{symbol}{pnl_amt:+,.2f} ({pct:+.2f}%)" if held_is_usd else f"{symbol}{pnl_amt:+,.0f} ({pct:+.2f}%)"
+                        })
                     
-                    symbol = "$" if held_is_usd else "₩"
-                    
-                    portfolio_rows.append({
-                        "자산": held_ticker,
-                        "보유 수량": f"{qty:,.4f}",
-                        "매수 평단": f"{symbol}{avg_p:,.2f}" if held_is_usd else f"{symbol}{avg_p:,.0f}",
-                        "현재가": f"{symbol}{cur_p:,.2f}" if held_is_usd else f"{symbol}{cur_p:,.0f}",
-                        "평가 금액": f"{symbol}{val_amt:,.2f}" if held_is_usd else f"{symbol}{val_amt:,.0f}",
-                        "평가 손익 (수익률)": f"{symbol}{pnl_amt:+,.2f} ({pct:+.2f}%)" if held_is_usd else f"{symbol}{pnl_amt:+,.0f} ({pct:+.2f}%)"
-                    })
+                    df_portfolio = pd.DataFrame(portfolio_rows)
+                    st.dataframe(df_portfolio, use_container_width=True, hide_index=True)
+    
+                # ⚡ 가상 거래 주문 설정
+                st.markdown("#### ⚡ 가상 거래 주문 설정")
                 
-                df_portfolio = pd.DataFrame(portfolio_rows)
-                st.dataframe(df_portfolio, use_container_width=True, hide_index=True)
-
-            # ⚡ 가상 거래 주문 설정
-            st.markdown("#### ⚡ 가상 거래 주문 설정")
-            
-            # 주문 대상 자산 선택 리스트 구성
-            asset_opts = [results['ticker']]
-            for name, fav_t in st.session_state.favorites:
-                if fav_t not in asset_opts:
-                    asset_opts.append(fav_t)
-            for port_t in portfolio.keys():
-                if port_t not in asset_opts:
-                    asset_opts.append(port_t)
-                    
-            selected_order_ticker = st.selectbox(
-                "주문 자산 선택",
-                options=asset_opts,
-                index=0,
-                key="virtual_order_ticker_select_box",
-                help="기본적으로 현재 분석 중인 자산이 선택되어 있으며, 보유 중이거나 즐겨찾기인 다른 자산도 선택할 수 있습니다."
-            )
-            
-            # 선택된 자산에 대한 현재가 및 화폐 단위 판단
-            if selected_order_ticker == results['ticker']:
-                order_price = results['current_price']
-                order_is_usd = results['is_usd']
-            else:
-                order_price = get_current_price_cached(selected_order_ticker)
-                if order_price is None:
-                    # 포트폴리오에 평단가가 있으면 그것으로 대체
-                    order_price = portfolio.get(selected_order_ticker, {}).get("avg_price", 0.0)
-                order_is_usd = not (selected_order_ticker.upper().endswith('.KS') or selected_order_ticker.upper().endswith('.KQ'))
-                
-            currency_symbol = "$" if order_is_usd else "₩"
-            
-            if order_price == 0.0:
-                st.warning("⚠️ 선택한 자산의 실시간 시세를 가져올 수 없어 주문을 진행할 수 없습니다.")
-            else:
-                st.markdown(f"**{selected_order_ticker}** 현재 시세: **{currency_symbol}{order_price:,.2f}**" if order_is_usd else f"**{selected_order_ticker}** 현재 시세: **{currency_symbol}{order_price:,.0f}**")
-                
-                order_type = st.radio(
-                    "주문 유형", 
-                    ["시장가 (즉시 체결)", "지정가 (예약 체결)"], 
-                    horizontal=True, 
-                    key="virtual_order_type_select_sidebar"
+                # 주문 대상 자산 선택 리스트 구성
+                asset_opts = [results['ticker']]
+                for name, fav_t in st.session_state.favorites:
+                    if fav_t not in asset_opts:
+                        asset_opts.append(fav_t)
+                for port_t in portfolio.keys():
+                    if port_t not in asset_opts:
+                        asset_opts.append(port_t)
+                        
+                selected_order_ticker = st.selectbox(
+                    "주문 자산 선택",
+                    options=asset_opts,
+                    index=0,
+                    key="virtual_order_ticker_select_box",
+                    help="기본적으로 현재 분석 중인 자산이 선택되어 있으며, 보유 중이거나 즐겨찾기인 다른 자산도 선택할 수 있습니다."
                 )
                 
-                # 주문 대상 자산에 대한 보유 수량 정보
-                selected_holding = portfolio.get(selected_order_ticker, {"qty": 0.0, "avg_price": 0.0, "is_usd": order_is_usd})
-                held_qty = selected_holding["qty"]
-                
-                col_tr_buy, col_tr_sell = st.columns(2)
-                
-                with col_tr_buy:
-                    st.markdown("**🟢 매수 주문 (BUY)**")
-                    max_buy_cash = usd_cash if order_is_usd else krw_cash
+                # 선택된 자산에 대한 현재가 및 화폐 단위 판단
+                if selected_order_ticker == results['ticker']:
+                    order_price = results['current_price']
+                    order_is_usd = results['is_usd']
+                else:
+                    order_price = get_current_price_cached(selected_order_ticker)
+                    if order_price is None:
+                        # 포트폴리오에 평단가가 있으면 그것으로 대체
+                        order_price = portfolio.get(selected_order_ticker, {}).get("avg_price", 0.0)
+                    order_is_usd = not (selected_order_ticker.upper().endswith('.KS') or selected_order_ticker.upper().endswith('.KQ'))
                     
-                    if order_type == "지정가 (예약 체결)":
-                        limit_buy_price = st.number_input(
-                            "매수 지정가 입력", 
-                            min_value=0.0, 
-                            value=order_price, 
-                            step=order_price/100, 
-                            key="limit_buy_price_input_col"
-                        )
-                        buy_amount = st.number_input(
-                            "매수 금액 입력", 
-                            min_value=0.0, 
-                            max_value=float(max_buy_cash), 
-                            value=0.0, 
-                            step=100.0 if order_is_usd else 100000.0, 
-                            key="buy_amount_input_limit_col"
-                        )
-                        exp_qty = buy_amount / limit_buy_price if limit_buy_price > 0 else 0.0
-                        st.caption(f"예상 매수: **{exp_qty:,.4f} {selected_order_ticker.split('-')[0]}**")
+                currency_symbol = "$" if order_is_usd else "₩"
+                
+                if order_price == 0.0:
+                    st.warning("⚠️ 선택한 자산의 실시간 시세를 가져올 수 없어 주문을 진행할 수 없습니다.")
+                else:
+                    st.markdown(f"**{selected_order_ticker}** 현재 시세: **{currency_symbol}{order_price:,.2f}**" if order_is_usd else f"**{selected_order_ticker}** 현재 시세: **{currency_symbol}{order_price:,.0f}**")
+                    
+                    order_type = st.radio(
+                        "주문 유형", 
+                        ["시장가 (즉시 체결)", "지정가 (예약 체결)"], 
+                        horizontal=True, 
+                        key="virtual_order_type_select_sidebar"
+                    )
+                    
+                    # 주문 대상 자산에 대한 보유 수량 정보
+                    selected_holding = portfolio.get(selected_order_ticker, {"qty": 0.0, "avg_price": 0.0, "is_usd": order_is_usd})
+                    held_qty = selected_holding["qty"]
+                    
+                    col_tr_buy, col_tr_sell = st.columns(2)
+                    
+                    with col_tr_buy:
+                        st.markdown("**🟢 매수 주문 (BUY)**")
+                        max_buy_cash = usd_cash if order_is_usd else krw_cash
                         
-                        if st.button("🔴 지정가 매수 예약", key="execute_limit_buy_btn_col", use_container_width=True):
-                            if buy_amount <= 0:
-                                st.error("매수 금액을 입력해 주세요.")
-                            elif limit_buy_price <= 0:
-                                st.error("올바른 지정가 가격을 입력해 주세요.")
-                            elif buy_amount > max_buy_cash:
-                                st.error("잔액이 부족합니다.")
-                            else:
-                                success, msg = virtual_trading_manager.add_limit_buy(trading_user_id, selected_order_ticker, limit_buy_price, buy_amount, order_is_usd)
-                                if success:
-                                    st.success(msg)
-                                    st.rerun()
+                        if order_type == "지정가 (예약 체결)":
+                            limit_buy_price = st.number_input(
+                                "매수 지정가 입력", 
+                                min_value=0.0, 
+                                value=order_price, 
+                                step=order_price/100, 
+                                key="limit_buy_price_input_col"
+                            )
+                            buy_amount = st.number_input(
+                                "매수 금액 입력", 
+                                min_value=0.0, 
+                                max_value=float(max_buy_cash), 
+                                value=0.0, 
+                                step=100.0 if order_is_usd else 100000.0, 
+                                key="buy_amount_input_limit_col"
+                            )
+                            exp_qty = buy_amount / limit_buy_price if limit_buy_price > 0 else 0.0
+                            st.caption(f"예상 매수: **{exp_qty:,.4f} {selected_order_ticker.split('-')[0]}**")
+                            
+                            if st.button("🔴 지정가 매수 예약", key="execute_limit_buy_btn_col", use_container_width=True):
+                                if buy_amount <= 0:
+                                    st.error("매수 금액을 입력해 주세요.")
+                                elif limit_buy_price <= 0:
+                                    st.error("올바른 지정가 가격을 입력해 주세요.")
+                                elif buy_amount > max_buy_cash:
+                                    st.error("잔액이 부족합니다.")
                                 else:
-                                    st.error(msg)
-                    else:
-                        buy_amount = st.number_input(
-                            "매수 금액 입력", 
-                            min_value=0.0, 
-                            max_value=float(max_buy_cash), 
-                            value=0.0, 
-                            step=100.0 if order_is_usd else 100000.0, 
-                            key="buy_amount_input_market_col"
-                        )
-                        exp_qty = buy_amount / order_price if order_price > 0 else 0.0
-                        st.caption(f"예상 매수: **{exp_qty:,.4f} {selected_order_ticker.split('-')[0]}**")
+                                    success, msg = virtual_trading_manager.add_limit_buy(trading_user_id, selected_order_ticker, limit_buy_price, buy_amount, order_is_usd)
+                                    if success:
+                                        st.success(msg)
+                                        st.rerun()
+                                    else:
+                                        st.error(msg)
+                        else:
+                            buy_amount = st.number_input(
+                                "매수 금액 입력", 
+                                min_value=0.0, 
+                                max_value=float(max_buy_cash), 
+                                value=0.0, 
+                                step=100.0 if order_is_usd else 100000.0, 
+                                key="buy_amount_input_market_col"
+                            )
+                            exp_qty = buy_amount / order_price if order_price > 0 else 0.0
+                            st.caption(f"예상 매수: **{exp_qty:,.4f} {selected_order_ticker.split('-')[0]}**")
+                            
+                            if st.button("🔴 시장가 매수 실행", key="execute_market_buy_btn_col", use_container_width=True):
+                                if buy_amount <= 0:
+                                    st.error("매수 금액을 입력해 주세요.")
+                                elif buy_amount > max_buy_cash:
+                                    st.error("잔액이 부족합니다.")
+                                else:
+                                    success, msg = virtual_trading_manager.execute_market_buy(trading_user_id, selected_order_ticker, buy_amount, order_price, order_is_usd)
+                                    if success:
+                                        st.success(msg)
+                                        st.rerun()
+                                    else:
+                                        st.error(msg)
+                                        
+                    with col_tr_sell:
+                        st.markdown("**🔴 매도 주문 (SELL)**")
                         
-                        if st.button("🔴 시장가 매수 실행", key="execute_market_buy_btn_col", use_container_width=True):
-                            if buy_amount <= 0:
-                                st.error("매수 금액을 입력해 주세요.")
-                            elif buy_amount > max_buy_cash:
-                                st.error("잔액이 부족합니다.")
-                            else:
-                                success, msg = virtual_trading_manager.execute_market_buy(trading_user_id, selected_order_ticker, buy_amount, order_price, order_is_usd)
+                        if order_type == "지정가 (예약 체결)":
+                            limit_sell_price = st.number_input(
+                                "매도 지정가 입력", 
+                                min_value=0.0, 
+                                value=order_price, 
+                                step=order_price/100, 
+                                key="limit_sell_price_input_col"
+                            )
+                            sell_qty = st.number_input(
+                                "매도 수량 입력", 
+                                min_value=0.0, 
+                                max_value=float(held_qty), 
+                                value=0.0, 
+                                step=held_qty/10 if held_qty > 0 else 0.1, 
+                                key="sell_qty_input_limit_col"
+                            )
+                            exp_recv = sell_qty * limit_sell_price
+                            st.caption(f"예상 정산: **{currency_symbol}{exp_recv:,.2f}**" if order_is_usd else f"예상 정산: **{currency_symbol}{exp_recv:,.0f}**")
+                            
+                            if st.button("🟢 지정가 매도 예약", key="execute_limit_sell_btn_col", use_container_width=True):
+                                if sell_qty <= 0:
+                                    st.error("매도 수량을 입력해 주세요.")
+                                elif limit_sell_price <= 0:
+                                    st.error("올바른 지정가 가격을 입력해 주세요.")
+                                elif sell_qty > held_qty:
+                                    st.error("보유 수량이 부족합니다.")
+                                else:
+                                    success, msg = virtual_trading_manager.add_limit_sell(trading_user_id, selected_order_ticker, limit_sell_price, sell_qty, order_is_usd)
+                                    if success:
+                                        st.success(msg)
+                                        st.rerun()
+                                    else:
+                                        st.error(msg)
+                        else:
+                            sell_qty = st.number_input(
+                                "매도 수량 입력", 
+                                min_value=0.0, 
+                                max_value=float(held_qty), 
+                                value=0.0, 
+                                step=held_qty/10 if held_qty > 0 else 0.1, 
+                                key="sell_qty_input_market_col"
+                            )
+                            exp_recv = sell_qty * order_price
+                            st.caption(f"예상 정산: **{currency_symbol}{exp_recv:,.2f}**" if order_is_usd else f"예상 정산: **{currency_symbol}{exp_recv:,.0f}**")
+                            
+                            if st.button("🟢 시장가 매도 실행", key="execute_market_sell_btn_col", use_container_width=True):
+                                if sell_qty <= 0:
+                                    st.error("매도 수량을 입력해 주세요.")
+                                elif sell_qty > held_qty:
+                                    st.error("보유 수량이 부족합니다.")
+                                else:
+                                    success, msg = virtual_trading_manager.execute_market_sell(trading_user_id, selected_order_ticker, sell_qty, order_price, order_is_usd)
+                                    if success:
+                                        st.success(msg)
+                                        st.rerun()
+                                    else:
+                                        st.error(msg)
+    
+                # ⏳ 통합 대기 중인 지정가 주문 목록 (전체 자산)
+                st.markdown("#### ⏳ 대기 중인 지정가 주문 목록")
+                if not limit_orders:
+                    st.caption("대기 중인 지정가 주문이 없습니다.")
+                else:
+                    for idx, order in enumerate(limit_orders):
+                        o_curr = "$" if order["is_usd"] else "₩"
+                        col_o1, col_o2 = st.columns([0.75, 0.25])
+                        with col_o1:
+                            st.markdown(f"📌 **{order['ticker']}** | {order['type'].split('(')[0].strip()}\n* 목표가: {o_curr}{order['target_price']:,.2f} | 수량: {order['qty']:,.4f}")
+                        with col_o2:
+                            if st.button("취소 ❌", key=f"cancel_order_col_{order['id']}_{idx}", use_container_width=True):
+                                success, msg = virtual_trading_manager.cancel_limit_order(trading_user_id, order["id"])
                                 if success:
-                                    st.success(msg)
+                                    st.toast(msg, icon="❌")
                                     st.rerun()
                                 else:
                                     st.error(msg)
                                     
-                with col_tr_sell:
-                    st.markdown("**🔴 매도 주문 (SELL)**")
-                    
-                    if order_type == "지정가 (예약 체결)":
-                        limit_sell_price = st.number_input(
-                            "매도 지정가 입력", 
-                            min_value=0.0, 
-                            value=order_price, 
-                            step=order_price/100, 
-                            key="limit_sell_price_input_col"
-                        )
-                        sell_qty = st.number_input(
-                            "매도 수량 입력", 
-                            min_value=0.0, 
-                            max_value=float(held_qty), 
-                            value=0.0, 
-                            step=held_qty/10 if held_qty > 0 else 0.1, 
-                            key="sell_qty_input_limit_col"
-                        )
-                        exp_recv = sell_qty * limit_sell_price
-                        st.caption(f"예상 정산: **{currency_symbol}{exp_recv:,.2f}**" if order_is_usd else f"예상 정산: **{currency_symbol}{exp_recv:,.0f}**")
-                        
-                        if st.button("🟢 지정가 매도 예약", key="execute_limit_sell_btn_col", use_container_width=True):
-                            if sell_qty <= 0:
-                                st.error("매도 수량을 입력해 주세요.")
-                            elif limit_sell_price <= 0:
-                                st.error("올바른 지정가 가격을 입력해 주세요.")
-                            elif sell_qty > held_qty:
-                                st.error("보유 수량이 부족합니다.")
-                            else:
-                                success, msg = virtual_trading_manager.add_limit_sell(trading_user_id, selected_order_ticker, limit_sell_price, sell_qty, order_is_usd)
-                                if success:
-                                    st.success(msg)
-                                    st.rerun()
-                                else:
-                                    st.error(msg)
+                # 매매 이력 로그 및 리셋
+                with st.expander("📜 가상 거래 내역 및 계좌 관리"):
+                    if history:
+                        history_df = pd.DataFrame(history[::-1])
+                        st.dataframe(history_df, use_container_width=True, hide_index=True)
                     else:
-                        sell_qty = st.number_input(
-                            "매도 수량 입력", 
-                            min_value=0.0, 
-                            max_value=float(held_qty), 
-                            value=0.0, 
-                            step=held_qty/10 if held_qty > 0 else 0.1, 
-                            key="sell_qty_input_market_col"
-                        )
-                        exp_recv = sell_qty * order_price
-                        st.caption(f"예상 정산: **{currency_symbol}{exp_recv:,.2f}**" if order_is_usd else f"예상 정산: **{currency_symbol}{exp_recv:,.0f}**")
-                        
-                        if st.button("🟢 시장가 매도 실행", key="execute_market_sell_btn_col", use_container_width=True):
-                            if sell_qty <= 0:
-                                st.error("매도 수량을 입력해 주세요.")
-                            elif sell_qty > held_qty:
-                                st.error("보유 수량이 부족합니다.")
-                            else:
-                                success, msg = virtual_trading_manager.execute_market_sell(trading_user_id, selected_order_ticker, sell_qty, order_price, order_is_usd)
-                                if success:
-                                    st.success(msg)
-                                    st.rerun()
-                                else:
-                                    st.error(msg)
-
-            # ⏳ 통합 대기 중인 지정가 주문 목록 (전체 자산)
-            st.markdown("#### ⏳ 대기 중인 지정가 주문 목록")
-            if not limit_orders:
-                st.caption("대기 중인 지정가 주문이 없습니다.")
-            else:
-                for idx, order in enumerate(limit_orders):
-                    o_curr = "$" if order["is_usd"] else "₩"
-                    col_o1, col_o2 = st.columns([0.75, 0.25])
-                    with col_o1:
-                        st.markdown(f"📌 **{order['ticker']}** | {order['type'].split('(')[0].strip()}\n* 목표가: {o_curr}{order['target_price']:,.2f} | 수량: {order['qty']:,.4f}")
-                    with col_o2:
-                        if st.button("취소 ❌", key=f"cancel_order_col_{order['id']}_{idx}", use_container_width=True):
-                            success, msg = virtual_trading_manager.cancel_limit_order(trading_user_id, order["id"])
-                            if success:
-                                st.toast(msg, icon="❌")
-                                st.rerun()
-                            else:
-                                st.error(msg)
-                                
-            # 매매 이력 로그 및 리셋
-            with st.expander("📜 가상 거래 내역 및 계좌 관리"):
-                if history:
-                    history_df = pd.DataFrame(history[::-1])
-                    st.dataframe(history_df, use_container_width=True, hide_index=True)
-                else:
-                    st.caption("거래 내역이 없습니다.")
-                
-                st.write("---")
-                if st.button("🔄 가상 계좌 초기화 (자산 리셋)", key="reset_virtual_trading_btn_col", use_container_width=True):
-                    virtual_trading_manager.reset_user_data(trading_user_id)
-                    st.toast("가상 계좌가 초기 상태로 재설정되었습니다!", icon="🔄")
-                    st.rerun()
-
+                        st.caption("거래 내역이 없습니다.")
+                    
+                    st.write("---")
+                    if st.button("🔄 가상 계좌 초기화 (자산 리셋)", key="reset_virtual_trading_btn_col", use_container_width=True):
+                        virtual_trading_manager.reset_user_data(trading_user_id)
+                        st.toast("가상 계좌가 초기 상태로 재설정되었습니다!", icon="🔄")
+                        st.rerun()
+    
     except Exception as e:
         st.error(f"❌ 데이터 분석 중 오류가 발생했습니다.")
         st.code(traceback.format_exc())

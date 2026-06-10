@@ -57,6 +57,11 @@ def fmt_chart_val(val, is_usd):
 def get_fib_levels(high, low):
     diff = high - low
     return {
+        '2.618 (신고가 돌파 5차 목표)': low + 2.618 * diff,
+        '2.000 (신고가 돌파 4차 목표 - 2배 확장)': low + 2.000 * diff,
+        '1.618 (신고가 돌파 3차 목표 - 황금 확장)': low + 1.618 * diff,
+        '1.414 (신고가 돌파 2차 목표)': low + 1.414 * diff,
+        '1.272 (신고가 돌파 1차 목표)': low + 1.272 * diff,
         '1.000 (고점)': high,
         '0.764 (1차 조정선)': low + 0.764 * diff,
         '0.618 (첫 주요 지지선)': low + 0.618 * diff,
