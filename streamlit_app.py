@@ -158,50 +158,200 @@ components.html(
             doc.head.appendChild(style);
         }
 
+        // 한글 2벌식 오토마타 조립용 설정
+        const CHO_LIST = ["ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
+        const JUNG_LIST = ["ㅏ", "ㅐ", "ㅑ", "ㅒ", "ㅓ", "ㅔ", "ㅕ", "ㅖ", "ㅗ", "ㅘ", "ㅙ", "ㅚ", "요", "ㅜ", "ㅝ", "ㅞ", "ㅟ", "ㅠ", "ㅡ", "ㅢ", "ㅣ"];
+        const JONG_LIST_CORRECT = ["", "ㄱ", "ㄲ", "ㄳ", "ㄴ", "ㄵ", "ㄶ", "ㄷ", "ㄹ", "ㄺ", "ㄻ", "ㄼ", "ㄽ", "ㄾ", "ㄿ", "ㅀ", "ㅁ", "ㅂ", "ㅄ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
+
+        const CONSONANTS = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
+        const ALL_VOWELS = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ";
+
+        const DOUBLE_JUNG = {
+            "ㅗ": { "ㅏ": "ㅘ", "ㅐ": "ㅙ", "ㅣ": "ㅚ" },
+            "ㅜ": { "ㅓ": "ㅝ", "ㅔ": "ㅞ", "ㅣ": "ㅟ" },
+            "ㅡ": { "ㅣ": "ㅢ" }
+        };
+
+        const DOUBLE_JONG = {
+            "ㄱ": { "ㅅ": "ㄳ" },
+            "ㄴ": { "ㅈ": "ㄵ", "ㅎ": "ㄶ" },
+            "ㄹ": { "ㄱ": "ㄺ", "ㅁ": "ㄻ", "ㅂ": "ㄼ", "ㅅ": "ㄽ", "ㅌ": "ㄾ", "ㅍ": "ㄿ", "ㅎ": "ㅀ" },
+            "ㅂ": { "ㅅ": "ㅄ" }
+        };
+
+        function assembleHangul(arr) {
+            let result = "";
+            let i = 0;
+            let tempArr = [...arr];
+            
+            while (i < tempArr.length) {
+                let char1 = tempArr[i];
+                
+                if (!CONSONANTS.includes(char1)) {
+                    if (ALL_VOWELS.includes(char1)) {
+                        if (i + 1 < tempArr.length && ALL_VOWELS.includes(tempArr[i + 1])) {
+                            let doubleJung = DOUBLE_JUNG[char1] && DOUBLE_JUNG[char1][tempArr[i + 1]];
+                            if (doubleJung) {
+                                result += doubleJung;
+                                i += 2;
+                                continue;
+                            }
+                        }
+                    }
+                    result += char1;
+                    i++;
+                    continue;
+                }
+                
+                let cho = CHO_LIST.indexOf(char1);
+                if (cho === -1) {
+                    result += char1;
+                    i++;
+                    continue;
+                }
+                
+                if (i + 1 >= tempArr.length) {
+                    result += char1;
+                    break;
+                }
+                
+                let char2 = tempArr[i + 1];
+                if (!ALL_VOWELS.includes(char2)) {
+                    result += char1;
+                    i++;
+                    continue;
+                }
+                
+                let jung = JUNG_LIST.indexOf(char2);
+                
+                if (i + 2 < tempArr.length) {
+                    let char3 = tempArr[i + 2];
+                    if (ALL_VOWELS.includes(char3)) {
+                        let doubleJung = DOUBLE_JUNG[char2] && DOUBLE_JUNG[char2][char3];
+                        if (doubleJung) {
+                            jung = JUNG_LIST.indexOf(doubleJung);
+                            char2 = doubleJung;
+                            tempArr.splice(i + 1, 2, doubleJung);
+                        }
+                    }
+                }
+                
+                let code = cho * 588 + jung * 28 + 44032;
+                
+                if (i + 2 >= tempArr.length) {
+                    result += String.fromCharCode(code);
+                    break;
+                }
+                
+                let char3 = tempArr[i + 2];
+                if (ALL_VOWELS.includes(char3)) {
+                    result += String.fromCharCode(code);
+                    i += 2;
+                    continue;
+                }
+                
+                if (!CONSONANTS.includes(char3)) {
+                    result += String.fromCharCode(code);
+                    i += 2;
+                    continue;
+                }
+                
+                let jong = JONG_LIST_CORRECT.indexOf(char3);
+                if (jong === -1 || jong === 0) {
+                    result += String.fromCharCode(code);
+                    i += 2;
+                    continue;
+                }
+                
+                if (i + 3 < tempArr.length) {
+                    let char4 = tempArr[i + 3];
+                    if (ALL_VOWELS.includes(char4)) {
+                        result += String.fromCharCode(code);
+                        i += 2;
+                        continue;
+                    } else {
+                        let doubleJong = DOUBLE_JONG[char3] && DOUBLE_JONG[char3][char4];
+                        if (doubleJong) {
+                            if (i + 4 < tempArr.length && ALL_VOWELS.includes(tempArr[i + 4])) {
+                                let singleJong = JONG_LIST_CORRECT.indexOf(char3);
+                                result += String.fromCharCode(code + singleJong);
+                                i += 3;
+                                continue;
+                            } else {
+                                let doubleJongIdx = JONG_LIST_CORRECT.indexOf(doubleJong);
+                                result += String.fromCharCode(code + doubleJongIdx);
+                                i += 4;
+                                continue;
+                            }
+                        } else {
+                            result += String.fromCharCode(code + jong);
+                            i += 3;
+                            continue;
+                        }
+                    }
+                } else {
+                    result += String.fromCharCode(code + jong);
+                    i += 3;
+                    break;
+                }
+            }
+            return result;
+        }
+
+        let currentLang = 'EN'; // 'EN' 또는 'KO'
+        let isShift = false;
+        let hangulBuffer = [];
+
+        const KEYBOARD_LAYOUTS = {
+            EN: {
+                normal: [
+                    ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+                    ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+                    ["Z", "X", "C", "V", "B", "N", "M", "-", "."]
+                ],
+                shift: [
+                    ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+                    ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+                    ["Z", "X", "C", "V", "B", "N", "M", "_", "@"]
+                ]
+            },
+            KO: {
+                normal: [
+                    ["ㅂ", "ㅈ", "ㄷ", "ㄱ", "ㅅ", "ㅛ", "ㅕ", "ㅑ", "ㅐ", "ㅔ"],
+                    ["ㅁ", "ㄴ", "ㅇ", "ㄹ", "ㅎ", "ㅗ", "ㅓ", "ㅏ", "ㅣ"],
+                    ["ㅋ", "ㅌ", "ㅊ", "ㅍ", "ㅠ", "ㅜ", "ㅡ", "-", "."]
+                ],
+                shift: [
+                    ["ㅃ", "ㅉ", "ㄸ", "ㄲ", "ㅆ", "ㅛ", "ㅕ", "ㅑ", "ㅒ", "ㅖ"],
+                    ["ㅁ", "ㄴ", "ㅇ", "ㄹ", "ㅎ", "ㅗ", "ㅓ", "ㅏ", "ㅣ"],
+                    ["ㅋ", "ㅌ", "ㅊ", "ㅍ", "ㅠ", "ㅜ", "ㅡ", "_", "@"]
+                ]
+            }
+        };
+
         // 2. 키보드 HTML 컨테이너 생성 및 body에 추가
         let panel = doc.getElementById('vkey-panel');
         if (!panel) {
             panel = doc.createElement('div');
             panel.id = 'vkey-panel';
-            panel.innerHTML = `
-                <!-- 첫 번째 줄: QWERTY 문자 -->
-                <div class="vkey-row">
-                    <div class="vkey-btn" data-key="Q">Q</div>
-                    <div class="vkey-btn" data-key="W">W</div>
-                    <div class="vkey-btn" data-key="E">E</div>
-                    <div class="vkey-btn" data-key="R">R</div>
-                    <div class="vkey-btn" data-key="T">T</div>
-                    <div class="vkey-btn" data-key="Y">Y</div>
-                    <div class="vkey-btn" data-key="U">U</div>
-                    <div class="vkey-btn" data-key="I">I</div>
-                    <div class="vkey-btn" data-key="O">O</div>
-                    <div class="vkey-btn" data-key="P">P</div>
-                </div>
-                <!-- 두 번째 줄: A-L -->
-                <div class="vkey-row">
-                    <div class="vkey-btn" data-key="A">A</div>
-                    <div class="vkey-btn" data-key="S">S</div>
-                    <div class="vkey-btn" data-key="D">D</div>
-                    <div class="vkey-btn" data-key="F">F</div>
-                    <div class="vkey-btn" data-key="G">G</div>
-                    <div class="vkey-btn" data-key="H">H</div>
-                    <div class="vkey-btn" data-key="J">J</div>
-                    <div class="vkey-btn" data-key="K">K</div>
-                    <div class="vkey-btn" data-key="L">L</div>
-                </div>
-                <!-- 세 번째 줄: Z-M 및 특수문자 -->
-                <div class="vkey-row">
-                    <div class="vkey-btn" data-key="Z">Z</div>
-                    <div class="vkey-btn" data-key="X">X</div>
-                    <div class="vkey-btn" data-key="C">C</div>
-                    <div class="vkey-btn" data-key="V">V</div>
-                    <div class="vkey-btn" data-key="B">B</div>
-                    <div class="vkey-btn" data-key="N">N</div>
-                    <div class="vkey-btn" data-key="M">M</div>
-                    <div class="vkey-btn" data-key="-">-</div>
-                    <div class="vkey-btn" data-key=".">.</div>
-                </div>
-                <!-- 네 번째 줄: 숫자 및 기능키 -->
+            doc.body.appendChild(panel);
+        }
+
+        function renderKeyboard() {
+            if (!panel) return;
+            const layoutSet = KEYBOARD_LAYOUTS[currentLang];
+            const rows = isShift ? layoutSet.shift : layoutSet.normal;
+            let htmlContent = "";
+            
+            rows.forEach(row => {
+                htmlContent += '<div class="vkey-row">';
+                row.forEach(key => {
+                    htmlContent += `<div class="vkey-btn" data-key="${key}">${key}</div>`;
+                });
+                htmlContent += '</div>';
+            });
+            
+            htmlContent += `
                 <div class="vkey-row">
                     <div class="vkey-btn" data-key="1">1</div>
                     <div class="vkey-btn" data-key="2">2</div>
@@ -214,15 +364,23 @@ components.html(
                     <div class="vkey-btn" data-key="9">9</div>
                     <div class="vkey-btn" data-key="0">0</div>
                 </div>
-                <!-- 다섯 번째 줄: 기능키들 -->
+            `;
+            
+            const shiftActiveStyle = isShift ? "background: rgba(96, 165, 250, 0.4); border-color: #60A5FA;" : "";
+            htmlContent += `
                 <div class="vkey-row">
                     <div class="vkey-btn special danger" data-action="clear">Clear</div>
+                    <div class="vkey-btn special" data-action="shift" style="${shiftActiveStyle}">Shift</div>
+                    <div class="vkey-btn special" data-action="space" style="flex: 2; max-width: 140px;">Space</div>
                     <div class="vkey-btn special" data-action="backspace">←</div>
+                    <div class="vkey-btn special" data-action="lang" style="color: #FBBF24;">${currentLang === 'EN' ? '한글' : 'English'}</div>
                     <div class="vkey-btn special close" data-action="close">Close</div>
                 </div>
             `;
-            doc.body.appendChild(panel);
+            panel.innerHTML = htmlContent;
         }
+
+        renderKeyboard();
 
         // 3. React 및 Streamlit 바인딩 및 이벤트 제어 로직
         let activeInput = null;
@@ -251,11 +409,12 @@ components.html(
                 input.dataset.vkeyBound = "true";
 
                 const handleFocus = () => {
+                    if (activeInput !== input) {
+                        hangulBuffer = [];
+                    }
                     activeInput = input;
                     if (input.value.trim() === "") {
                         showKeyboard();
-                    } else {
-                        hideKeyboard();
                     }
                 };
 
@@ -265,8 +424,6 @@ components.html(
                     activeInput = input;
                     if (input.value.trim() === "") {
                         showKeyboard();
-                    } else {
-                        hideKeyboard();
                     }
                 });
             });
@@ -281,6 +438,7 @@ components.html(
             if (activeInput && !activeInput.contains(e.target) && !panel.contains(e.target)) {
                 hideKeyboard();
                 activeInput = null;
+                hangulBuffer = [];
             }
         });
 
@@ -297,22 +455,44 @@ components.html(
             const action = btn.dataset.action;
 
             if (key) {
-                setInputValue(activeInput, activeInput.value + key);
+                hangulBuffer.push(key);
+                setInputValue(activeInput, assembleHangul(hangulBuffer));
+                if (isShift) {
+                    isShift = false;
+                    renderKeyboard();
+                }
+            } else if (action === 'space') {
+                hangulBuffer.push(" ");
+                setInputValue(activeInput, assembleHangul(hangulBuffer));
             } else if (action === 'clear') {
+                hangulBuffer = [];
                 setInputValue(activeInput, "");
                 showKeyboard();
             } else if (action === 'backspace') {
-                const curVal = activeInput.value;
-                if (curVal.length > 0) {
-                    setInputValue(activeInput, curVal.substring(0, curVal.length - 1));
+                if (hangulBuffer.length > 0) {
+                    hangulBuffer.pop();
+                    setInputValue(activeInput, assembleHangul(hangulBuffer));
+                } else {
+                    const curVal = activeInput.value;
+                    if (curVal.length > 0) {
+                        setInputValue(activeInput, curVal.substring(0, curVal.length - 1));
+                    }
                 }
                 if (activeInput.value.trim() === "") {
                     showKeyboard();
                 }
+            } else if (action === 'shift') {
+                isShift = !isShift;
+                renderKeyboard();
+            } else if (action === 'lang') {
+                currentLang = currentLang === 'EN' ? 'KO' : 'EN';
+                isShift = false;
+                renderKeyboard();
             } else if (action === 'close') {
                 hideKeyboard();
                 activeInput.blur();
                 activeInput = null;
+                hangulBuffer = [];
             }
         });
     </script>
