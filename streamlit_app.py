@@ -423,9 +423,7 @@ components.html(
                         hangulBuffer = [];
                     }
                     activeInput = input;
-                    if (input.value.trim() === "") {
-                        showKeyboard();
-                    }
+                    showKeyboard();  // 항상 포커스 시 키보드 표시
                 };
 
                 input.addEventListener('focus', handleFocus);
@@ -839,17 +837,18 @@ with st.sidebar:
             st.session_state.search_ticker = val
             st.rerun()
             
-    # 티커 직접 검색 입력창 (세션 상태와 단방향 연동)
+    # 티커 직접 검색 입력창 — placeholder로 현재 티커 표시, 입력창은 항상 공백
     search_query = st.text_input(
-        "자산명 또는 티커 검색", 
-        value=st.session_state.search_ticker,
+        "자산명 또는 티커 검색",
+        value="",
+        placeholder=f"현재: {st.session_state.search_ticker}  |  새 티커 입력 후 Enter",
         key="ticker_input_widget",
         help="예: BTC-USD, AAPL, 005930.KS"
     )
-    
-    # 텍스트 입력창 조작 시 세션 상태 갱신
-    if search_query != st.session_state.search_ticker:
-        st.session_state.search_ticker = search_query
+
+    # 텍스트 입력창 조작 시 세션 상태 갱신 (빈 값은 무시)
+    if search_query and search_query.strip() and search_query.strip().upper() != st.session_state.search_ticker.upper():
+        st.session_state.search_ticker = search_query.strip().upper()
 
     # 대상 시장 선택
     market_opt = st.selectbox(
@@ -966,7 +965,9 @@ with st.sidebar:
         st.subheader("🔔 지정가 알림 등록")
         target_p = st.number_input(
             "목표 가격",
-            value=0.0,
+            min_value=0.0,
+            value=None,
+            placeholder="목표 가격을 입력하세요",
             step=0.01,
             key="alert_target_price_input"
         )
@@ -977,7 +978,7 @@ with st.sidebar:
             key="alert_condition_select"
         )
         if st.button("지정가 알림 추가", key="add_price_alert_btn"):
-            if target_p > 0:
+            if target_p and target_p > 0:
                 alert_manager.add_alert(current_ticker, target_p, cond)
                 st.success(f"{current_ticker} 지정가 {target_p} 알림이 추가되었습니다.")
                 st.rerun()
@@ -2021,32 +2022,38 @@ with main_container:
                         
                         if order_type == "지정가 (예약 체결)":
                             limit_buy_price = st.number_input(
-                                "매수 지정가 입력", 
-                                min_value=0.0, 
-                                value=order_price, 
-                                step=order_price/100, 
+                                "매수 지정가 입력",
+                                min_value=0.0,
+                                value=None,
+                                placeholder=f"현재가: {order_price:,.2f}",
+                                step=order_price/100 if order_price > 0 else 1.0,
                                 key="limit_buy_price_input_col"
                             )
                             buy_amount = st.number_input(
-                                "매수 금액 입력", 
-                                min_value=0.0, 
-                                max_value=float(max_buy_cash), 
-                                value=0.0, 
-                                step=100.0 if order_is_usd else 100000.0, 
+                                "매수 금액 입력",
+                                min_value=0.0,
+                                max_value=float(max_buy_cash),
+                                value=None,
+                                placeholder="금액을 입력하세요",
+                                step=100.0 if order_is_usd else 100000.0,
                                 key="buy_amount_input_limit_col"
                             )
-                            exp_qty = buy_amount / limit_buy_price if limit_buy_price > 0 else 0.0
+                            _lbp = limit_buy_price or 0.0
+                            _ba  = buy_amount or 0.0
+                            exp_qty = _ba / _lbp if _lbp > 0 else 0.0
                             st.caption(f"예상 매수: **{exp_qty:,.4f} {selected_order_ticker.split('-')[0]}**")
                             
                             if st.button("🔴 지정가 매수 예약", key="execute_limit_buy_btn_col", use_container_width=True):
-                                if buy_amount <= 0:
+                                _lbp = limit_buy_price or 0.0
+                                _ba  = buy_amount or 0.0
+                                if _ba <= 0:
                                     st.error("매수 금액을 입력해 주세요.")
-                                elif limit_buy_price <= 0:
+                                elif _lbp <= 0:
                                     st.error("올바른 지정가 가격을 입력해 주세요.")
-                                elif buy_amount > max_buy_cash:
+                                elif _ba > max_buy_cash:
                                     st.error("잔액이 부족합니다.")
                                 else:
-                                    success, msg = virtual_trading_manager.add_limit_buy(trading_user_id, selected_order_ticker, limit_buy_price, buy_amount, order_is_usd)
+                                    success, msg = virtual_trading_manager.add_limit_buy(trading_user_id, selected_order_ticker, _lbp, _ba, order_is_usd)
                                     if success:
                                         st.success(msg)
                                         st.rerun()
@@ -2054,23 +2061,25 @@ with main_container:
                                         st.error(msg)
                         else:
                             buy_amount = st.number_input(
-                                "매수 금액 입력", 
-                                min_value=0.0, 
-                                max_value=float(max_buy_cash), 
-                                value=0.0, 
-                                step=100.0 if order_is_usd else 100000.0, 
+                                "매수 금액 입력",
+                                min_value=0.0,
+                                max_value=float(max_buy_cash),
+                                value=None,
+                                placeholder="금액을 입력하세요",
+                                step=100.0 if order_is_usd else 100000.0,
                                 key="buy_amount_input_market_col"
                             )
-                            exp_qty = buy_amount / order_price if order_price > 0 else 0.0
+                            _ba2 = buy_amount or 0.0
+                            exp_qty = _ba2 / order_price if order_price > 0 else 0.0
                             st.caption(f"예상 매수: **{exp_qty:,.4f} {selected_order_ticker.split('-')[0]}**")
-                            
+
                             if st.button("🔴 시장가 매수 실행", key="execute_market_buy_btn_col", use_container_width=True):
-                                if buy_amount <= 0:
+                                if _ba2 <= 0:
                                     st.error("매수 금액을 입력해 주세요.")
-                                elif buy_amount > max_buy_cash:
+                                elif _ba2 > max_buy_cash:
                                     st.error("잔액이 부족합니다.")
                                 else:
-                                    success, msg = virtual_trading_manager.execute_market_buy(trading_user_id, selected_order_ticker, buy_amount, order_price, order_is_usd)
+                                    success, msg = virtual_trading_manager.execute_market_buy(trading_user_id, selected_order_ticker, _ba2, order_price, order_is_usd)
                                     if success:
                                         st.success(msg)
                                         st.rerun()
@@ -2082,32 +2091,38 @@ with main_container:
                         
                         if order_type == "지정가 (예약 체결)":
                             limit_sell_price = st.number_input(
-                                "매도 지정가 입력", 
-                                min_value=0.0, 
-                                value=order_price, 
-                                step=order_price/100, 
+                                "매도 지정가 입력",
+                                min_value=0.0,
+                                value=None,
+                                placeholder=f"현재가: {order_price:,.2f}",
+                                step=order_price/100 if order_price > 0 else 1.0,
                                 key="limit_sell_price_input_col"
                             )
                             sell_qty = st.number_input(
-                                "매도 수량 입력", 
-                                min_value=0.0, 
-                                max_value=float(held_qty), 
-                                value=0.0, 
-                                step=held_qty/10 if held_qty > 0 else 0.1, 
+                                "매도 수량 입력",
+                                min_value=0.0,
+                                max_value=float(held_qty),
+                                value=None,
+                                placeholder="수량을 입력하세요",
+                                step=held_qty/10 if held_qty > 0 else 0.1,
                                 key="sell_qty_input_limit_col"
                             )
-                            exp_recv = sell_qty * limit_sell_price
+                            _lsp = limit_sell_price or 0.0
+                            _sq  = sell_qty or 0.0
+                            exp_recv = _sq * _lsp
                             st.caption(f"예상 정산: **{currency_symbol}{exp_recv:,.2f}**" if order_is_usd else f"예상 정산: **{currency_symbol}{exp_recv:,.0f}**")
                             
                             if st.button("🟢 지정가 매도 예약", key="execute_limit_sell_btn_col", use_container_width=True):
-                                if sell_qty <= 0:
+                                _lsp = limit_sell_price or 0.0
+                                _sq  = sell_qty or 0.0
+                                if _sq <= 0:
                                     st.error("매도 수량을 입력해 주세요.")
-                                elif limit_sell_price <= 0:
+                                elif _lsp <= 0:
                                     st.error("올바른 지정가 가격을 입력해 주세요.")
-                                elif sell_qty > held_qty:
+                                elif _sq > held_qty:
                                     st.error("보유 수량이 부족합니다.")
                                 else:
-                                    success, msg = virtual_trading_manager.add_limit_sell(trading_user_id, selected_order_ticker, limit_sell_price, sell_qty, order_is_usd)
+                                    success, msg = virtual_trading_manager.add_limit_sell(trading_user_id, selected_order_ticker, _lsp, _sq, order_is_usd)
                                     if success:
                                         st.success(msg)
                                         st.rerun()
@@ -2115,23 +2130,25 @@ with main_container:
                                         st.error(msg)
                         else:
                             sell_qty = st.number_input(
-                                "매도 수량 입력", 
-                                min_value=0.0, 
-                                max_value=float(held_qty), 
-                                value=0.0, 
-                                step=held_qty/10 if held_qty > 0 else 0.1, 
+                                "매도 수량 입력",
+                                min_value=0.0,
+                                max_value=float(held_qty),
+                                value=None,
+                                placeholder="수량을 입력하세요",
+                                step=held_qty/10 if held_qty > 0 else 0.1,
                                 key="sell_qty_input_market_col"
                             )
-                            exp_recv = sell_qty * order_price
+                            _sq2 = sell_qty or 0.0
+                            exp_recv = _sq2 * order_price
                             st.caption(f"예상 정산: **{currency_symbol}{exp_recv:,.2f}**" if order_is_usd else f"예상 정산: **{currency_symbol}{exp_recv:,.0f}**")
                             
                             if st.button("🟢 시장가 매도 실행", key="execute_market_sell_btn_col", use_container_width=True):
-                                if sell_qty <= 0:
+                                if _sq2 <= 0:
                                     st.error("매도 수량을 입력해 주세요.")
-                                elif sell_qty > held_qty:
+                                elif _sq2 > held_qty:
                                     st.error("보유 수량이 부족합니다.")
                                 else:
-                                    success, msg = virtual_trading_manager.execute_market_sell(trading_user_id, selected_order_ticker, sell_qty, order_price, order_is_usd)
+                                    success, msg = virtual_trading_manager.execute_market_sell(trading_user_id, selected_order_ticker, _sq2, order_price, order_is_usd)
                                     if success:
                                         st.success(msg)
                                         st.rerun()
