@@ -575,6 +575,27 @@ st.markdown("""
 # 즐겨찾기 파일 경로 설정
 FAVORITES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "favorites_web.json")
 LAST_USER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_virtual_user.txt")
+UI_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui_settings.json")
+
+def load_ui_settings():
+    """마지막으로 저장된 UI 설정(화면 표시 옵션 등)을 파일에서 불러옵니다."""
+    default = {"show_virtual_trading": True}
+    if os.path.exists(UI_SETTINGS_FILE):
+        try:
+            with open(UI_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                default.update(loaded)
+        except Exception as e:
+            print(f"[UI Settings Load Error] {e}")
+    return default
+
+def save_ui_settings(settings: dict):
+    """UI 설정을 로컬 파일에 저장합니다."""
+    try:
+        with open(UI_SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"[UI Settings Save Error] {e}")
 
 def load_favorites():
     # 1. URL 쿼리 파라미터에서 먼저 즐겨찾기 복원 시도
@@ -743,6 +764,11 @@ if "messages" not in st.session_state:
 
 if "last_analyzed_ticker" not in st.session_state:
     st.session_state.last_analyzed_ticker = ""
+
+# UI 설정 초기화 (파일에서 마지막 설정 복원)
+if "show_virtual_trading" not in st.session_state:
+    _ui_settings = load_ui_settings()
+    st.session_state.show_virtual_trading = _ui_settings.get("show_virtual_trading", True)
 
 # 가상 매매(모의 투자) 사용자 ID 초기화
 if "virtual_user_id" not in st.session_state:
@@ -960,11 +986,15 @@ with st.sidebar:
     st.write("---")
     st.subheader("⚙️ 화면 설정")
     show_virtual_trading = st.toggle(
-        "💸 실시간 가상 매매 패널 표시", 
-        value=True, 
+        "💸 실시간 가상 매매 패널 표시",
+        value=st.session_state.show_virtual_trading,
         key="show_virtual_trading_toggle",
         help="체크 해제 시 가상 매매 사이드 패널을 숨기고 분석 리포트를 넓게 볼 수 있습니다."
     )
+    # 설정이 변경되었으면 세션 상태와 파일에 즉시 저장
+    if show_virtual_trading != st.session_state.show_virtual_trading:
+        st.session_state.show_virtual_trading = show_virtual_trading
+        save_ui_settings({"show_virtual_trading": show_virtual_trading})
 # ────────────────────────────────────────────────────────────
 # 자산 전환에 따른 채팅 내역 초기화 (React DOM NotFoundError 방지 핵심)
 # ────────────────────────────────────────────────────────────
