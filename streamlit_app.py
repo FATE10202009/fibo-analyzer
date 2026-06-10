@@ -262,6 +262,16 @@ if "messages" not in st.session_state:
 if "last_analyzed_ticker" not in st.session_state:
     st.session_state.last_analyzed_ticker = ""
 
+# 가상 매매(모의 투자) 세션 상태 초기화
+if "virtual_usd_cash" not in st.session_state:
+    st.session_state.virtual_usd_cash = 100000.0  # $100,000 USD
+if "virtual_krw_cash" not in st.session_state:
+    st.session_state.virtual_krw_cash = 100000000.0  # ₩100,000,000 KRW
+if "virtual_portfolio" not in st.session_state:
+    st.session_state.virtual_portfolio = {}  # {ticker: {"qty": qty, "avg_price": avg_price, "is_usd": is_usd}}
+if "virtual_history" not in st.session_state:
+    st.session_state.virtual_history = []  # [{"time": time, "ticker": ticker, "type": type, "price": price, "qty": qty, "amount": amount, "currency": currency}]
+
 # ────────────────────────────────────────────────────────────
 # Sidebar & User inputs
 # ────────────────────────────────────────────────────────────
@@ -1178,9 +1188,9 @@ with main_container:
         # ────────────────────────────────────────────────────────────
         st.subheader("📈 멀티 타임프레임 차트 및 피보나치 작도 (마우스 오버 가격 확인)")
         
-        # 탭 렌더링 (RSI 14 및 MACD Plotly 탭 복구)
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "🌐 All-Time (L)", "📅 180일 스윙 (M)", "📆 30일 단기 (S)", "⏰ 7일 초단기 (XS)", "💜 RSI 14", "💛 MACD", "🥔 Damus 알고리즘"
+        # 탭 렌더링 (RSI 14, MACD, Damus, 및 가상 매매 탭 추가)
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+            "🌐 All-Time (L)", "📅 180일 스윙 (M)", "📆 30일 단기 (S)", "⏰ 7일 초단기 (XS)", "💜 RSI 14", "💛 MACD", "🥔 Damus 알고리즘", "💸 가상 매매 (Mock Trading)"
         ])
         
         # L Size 차트 연산 및 렌더링
@@ -1244,6 +1254,151 @@ with main_container:
                 st.pyplot(fig_damus)
             else:
                 st.info("Damus 데이터를 생성할 수 없습니다.")
+
+        # 가상 매매 탭 렌더링
+        with tab8:
+            st.markdown("### 💸 실시간 가상 매매 (Paper Trading)")
+            st.markdown("현재 선택된 자산의 실시간 시세를 기준으로 모의 주문을 실행하고 모니터링할 수 있습니다.")
+            
+            trading_ticker = results['ticker']
+            is_usd = results['is_usd']
+            current_price = results['current_price']
+            currency = "$" if is_usd else "₩"
+            
+            # 보유 현금량
+            col_cash_usd, col_cash_krw = st.columns(2)
+            with col_cash_usd:
+                st.metric("💵 가상 USD 잔액", f"${st.session_state.virtual_usd_cash:,.2f}")
+            with col_cash_krw:
+                st.metric("💵 가상 KRW 잔액", f"₩{st.session_state.virtual_krw_cash:,.0f}")
+                
+            # 포트폴리오 보유 현황
+            portfolio = st.session_state.virtual_portfolio
+            holding = portfolio.get(trading_ticker, {"qty": 0.0, "avg_price": 0.0, "is_usd": is_usd})
+            holding_qty = holding["qty"]
+            holding_avg = holding["avg_price"]
+            
+            # 평가금액 및 손익 계산
+            valuation = 0.0
+            unrealized_pnl = 0.0
+            pnl_pct = 0.0
+            if holding_qty > 0:
+                valuation = holding_qty * current_price
+                cost_basis = holding_qty * holding_avg
+                unrealized_pnl = valuation - cost_basis
+                pnl_pct = (unrealized_pnl / cost_basis) * 100
+                
+            st.markdown("#### 📦 현재 자산 보유 현황")
+            col_h1, col_h2, col_h3, col_h4 = st.columns(4)
+            with col_h1:
+                st.metric("보유 수량", f"{holding_qty:,.4f} {trading_ticker.split('-')[0]}")
+            with col_h2:
+                st.metric("매수 평단가", f"{currency}{holding_avg:,.2f}" if is_usd else f"{currency}{holding_avg:,.0f}")
+            with col_h3:
+                st.metric("평가 금액", f"{currency}{valuation:,.2f}" if is_usd else f"{currency}{valuation:,.0f}")
+            with col_h4:
+                pnl_color = "🟢" if unrealized_pnl >= 0 else "🔴"
+                st.metric("평가 손익 (수익률)", f"{pnl_color} {currency}{unrealized_pnl:,.2f} ({pnl_pct:+.2f}%)" if is_usd else f"{pnl_color} {currency}{unrealized_pnl:,.0f} ({pnl_pct:+.2f}%)")
+                
+            # 주문창
+            st.markdown("#### ⚡ 신속 거래 주문")
+            col_buy, col_sell = st.columns(2)
+            
+            with col_buy:
+                st.markdown("**🟢 가상 매수 (BUY)**")
+                max_cash = st.session_state.virtual_usd_cash if is_usd else st.session_state.virtual_krw_cash
+                buy_amount = st.number_input("매수할 금액 입력", min_value=0.0, max_value=float(max_cash), value=0.0, step=100.0 if is_usd else 100000.0, key="buy_amount_input")
+                expected_qty = buy_amount / current_price if current_price > 0 else 0.0
+                st.caption(f"예상 매수 수량: **{expected_qty:,.4f} {trading_ticker.split('-')[0]}**")
+                
+                if st.button("🔴 즉시 매수 실행", key="execute_buy_btn", use_container_width=True):
+                    if buy_amount <= 0:
+                        st.error("매수 금액을 입력해 주세요.")
+                    elif buy_amount > max_cash:
+                        st.error("잔액이 부족합니다.")
+                    else:
+                        if is_usd:
+                            st.session_state.virtual_usd_cash -= buy_amount
+                        else:
+                            st.session_state.virtual_krw_cash -= buy_amount
+                            
+                        new_qty = holding_qty + expected_qty
+                        new_avg = ((holding_qty * holding_avg) + buy_amount) / new_qty if new_qty > 0 else 0.0
+                        st.session_state.virtual_portfolio[trading_ticker] = {
+                            "qty": new_qty,
+                            "avg_price": new_avg,
+                            "is_usd": is_usd
+                        }
+                        
+                        import datetime
+                        st.session_state.virtual_history.append({
+                            "time": datetime.datetime.now().strftime("%m-%d %H:%M:%S"),
+                            "ticker": trading_ticker,
+                            "type": "매수 (BUY)",
+                            "price": current_price,
+                            "qty": expected_qty,
+                            "amount": buy_amount,
+                            "currency": currency
+                        })
+                        st.success(f"🎉 {trading_ticker} {expected_qty:,.4f}개 매수 완료!")
+                        st.rerun()
+                        
+            with col_sell:
+                st.markdown("**🔴 가상 매도 (SELL)**")
+                sell_qty = st.number_input("매도할 수량 입력", min_value=0.0, max_value=float(holding_qty), value=0.0, step=holding_qty/10 if holding_qty > 0 else 0.1, key="sell_qty_input")
+                expected_recv = sell_qty * current_price
+                st.caption(f"예상 정산 금액: **{currency}{expected_recv:,.2f}**" if is_usd else f"예상 정산 금액: **{currency}{expected_recv:,.0f}**")
+                
+                if st.button("🟢 즉시 매도 실행", key="execute_sell_btn", use_container_width=True):
+                    if sell_qty <= 0:
+                        st.error("매도 수량을 입력해 주세요.")
+                    elif sell_qty > holding_qty:
+                        st.error("보유 수량보다 많습니다.")
+                    else:
+                        new_qty = holding_qty - sell_qty
+                        if new_qty <= 0.0001:
+                            st.session_state.virtual_portfolio.pop(trading_ticker, None)
+                        else:
+                            st.session_state.virtual_portfolio[trading_ticker] = {
+                                "qty": new_qty,
+                                "avg_price": holding_avg,
+                                "is_usd": is_usd
+                            }
+                            
+                        if is_usd:
+                            st.session_state.virtual_usd_cash += expected_recv
+                        else:
+                            st.session_state.virtual_krw_cash += expected_recv
+                            
+                        import datetime
+                        st.session_state.virtual_history.append({
+                            "time": datetime.datetime.now().strftime("%m-%d %H:%M:%S"),
+                            "ticker": trading_ticker,
+                            "type": "매도 (SELL)",
+                            "price": current_price,
+                            "qty": sell_qty,
+                            "amount": expected_recv,
+                            "currency": currency
+                        })
+                        st.success(f"🎉 {trading_ticker} {sell_qty:,.4f}개 매도 완료!")
+                        st.rerun()
+                        
+            # 매매 이력 로그
+            st.markdown("#### 📜 가상 거래 내역")
+            if st.session_state.virtual_history:
+                import pandas as pd
+                history_df = pd.DataFrame(st.session_state.virtual_history[::-1])
+                st.dataframe(history_df, use_container_width=True)
+            else:
+                st.info("거래 이력이 없습니다.")
+                
+            if st.button("🔄 가상 계좌 초기화 (자산 리셋)", key="reset_virtual_trading_btn"):
+                st.session_state.virtual_usd_cash = 100000.0
+                st.session_state.virtual_krw_cash = 100000000.0
+                st.session_state.virtual_portfolio = {}
+                st.session_state.virtual_history = []
+                st.toast("가상 계좌가 초기 상태로 재설정되었습니다!", icon="🔄")
+                st.rerun()
 
         # ────────────────────────────────────────────────────────────
         # 3. 상세 분석 종합 리포트 마크다운 섹션
