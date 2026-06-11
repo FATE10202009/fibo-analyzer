@@ -1649,7 +1649,8 @@ def create_plotly_candlestick_chart(df, title, fib_levels=None, sma_cols=None, b
         xaxis_rangeslider_visible=False,
         showlegend=False,
         margin=dict(l=20, r=60, t=40, b=20),
-        hovermode="x unified"
+        hovermode="x unified",
+        dragmode=False  # 마우스 드래그 줌/이동 방지 (오직 상단 모드바 버튼으로만 조작)
     )
     fig.update_yaxes(title_text="가격", row=1, col=1, gridcolor='#22222A')
     fig.update_yaxes(title_text="거래량", row=2, col=1, gridcolor='#22222A')
@@ -2251,10 +2252,10 @@ with main_container:
                 "🌐 All-Time (L)", "📅 180일 스윙 (M)", "📆 30일 단기 (S)", "⏰ 7일 초단기 (XS)", "💜 RSI 14", "💛 MACD", "🥔 Damus 알고리즘"
             ]
             active_chart_tab = st.radio(
-                "차트 선택",
+                "🎯 차트 및 피보나치 타임프레임 선택",
                 options=chart_options,
                 horizontal=True,
-                label_visibility="collapsed",
+                label_visibility="visible",
                 key=f"chart_tab_selector_{results['ticker']}",
                 help="""💡 피보나치 타임프레임별 설명:
 - 🌐 L (장기 대파동): 전체 역사적 최고점/최저점 기준으로 분석한 대파동 피보나치 레벨입니다. 역사적인 장기 지지 및 저항 구간을 판별하는 데 사용됩니다.
@@ -2280,7 +2281,7 @@ with main_container:
                     l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
                     show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
                 )
-                st.plotly_chart(fig_l, use_container_width=True, key=f"plotly_chart_l_size_{results['ticker']}")
+                st.plotly_chart(fig_l, use_container_width=True, key=f"plotly_chart_l_size_{results['ticker']}", config={'scrollZoom': False})
                 
             elif active_chart_tab == "📅 180일 스윙 (M)":
                 fig_m = create_plotly_candlestick_chart(
@@ -2292,7 +2293,7 @@ with main_container:
                     l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
                     show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
                 )
-                st.plotly_chart(fig_m, use_container_width=True, key=f"plotly_chart_m_size_{results['ticker']}")
+                st.plotly_chart(fig_m, use_container_width=True, key=f"plotly_chart_m_size_{results['ticker']}", config={'scrollZoom': False})
                 
             elif active_chart_tab == "📆 30일 단기 (S)":
                 fig_s = create_plotly_candlestick_chart(
@@ -2303,7 +2304,7 @@ with main_container:
                     l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
                     show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
                 )
-                st.plotly_chart(fig_s, use_container_width=True, key=f"plotly_chart_s_size_{results['ticker']}")
+                st.plotly_chart(fig_s, use_container_width=True, key=f"plotly_chart_s_size_{results['ticker']}", config={'scrollZoom': False})
                 
             elif active_chart_tab == "⏰ 7일 초단기 (XS)":
                 fig_xs = create_plotly_candlestick_chart(
@@ -2313,7 +2314,7 @@ with main_container:
                     l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
                     show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
                 )
-                st.plotly_chart(fig_xs, use_container_width=True, key=f"plotly_chart_xs_size_{results['ticker']}")
+                st.plotly_chart(fig_xs, use_container_width=True, key=f"plotly_chart_xs_size_{results['ticker']}", config={'scrollZoom': False})
                 
             elif active_chart_tab == "💜 RSI 14":
                 fig_rsi = create_plotly_rsi_chart(results['df_m'])
