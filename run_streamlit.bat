@@ -9,8 +9,8 @@ start /b "" "C:\Users\fate1\AppData\Local\Programs\Python\Python312\python.exe" 
 :: Wait 3 seconds for Streamlit server to start up
 timeout /t 3 >nul
 
-:: Launch Google Chrome to the app's local URL
-start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" http://localhost:8501
+:: Launch default browser to the app's local URL
+start "" "http://localhost:8501"
 
 echo.
 echo Streamlit server is running on http://localhost:8501.
