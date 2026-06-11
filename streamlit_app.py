@@ -11,6 +11,7 @@ import streamlit.components.v1 as components
 import datetime
 import base64
 import hashlib
+import access_manager
 
 
 # 프로젝트 핵심 분석 모듈 임포트
@@ -650,6 +651,190 @@ st.markdown("""
 FAVORITES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "favorites_web.json")
 LAST_USER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_virtual_user.txt")
 UI_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui_settings.json")
+
+
+# ────────────────────────────────────────────────────────────
+# 🔐 접근 제어 게이트 (Access Control Gate)
+# ────────────────────────────────────────────────────────────
+
+# 브라우저에서 UUID를 생성하고 쿼리 파라미터 ?atoken=xxx 에 넣는 JS
+components.html("""
+<script>
+(function() {
+    const parent = window.parent;
+    if (!parent || !parent.location) return;
+    const url = new URL(parent.location.href);
+    if (!url.searchParams.has('atoken')) {
+        // 랜덤 UUID v4 생성
+        const uuid = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
+        url.searchParams.set('atoken', uuid);
+        parent.location.replace(url.toString());
+    }
+})();
+</script>
+""", height=0)
+
+def _render_access_gate():
+    """접근 제어 게이트를 렌더링합니다. 승인된 사용자만 통과합니다."""
+    token = st.query_params.get("atoken", "")
+    status = access_manager.check_access(token) if token else "unknown"
+
+    # ── 승인됨: 정상 통과 ──
+    if status == "approved":
+        return  # 게이트 통과
+
+    # ── 공통 스타일 ──
+    st.markdown("""
+    <style>
+    .gate-card {
+        max-width: 520px;
+        margin: 60px auto 0 auto;
+        background: rgba(20, 20, 30, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 20px;
+        padding: 40px 36px 36px 36px;
+        box-shadow: 0 16px 60px rgba(0,0,0,0.6);
+        text-align: center;
+    }
+    .gate-icon { font-size: 56px; margin-bottom: 12px; }
+    .gate-title {
+        font-size: 26px; font-weight: 800;
+        background: linear-gradient(135deg, #60A5FA, #818CF8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 8px;
+    }
+    .gate-sub { color: #94A3B8; font-size: 14px; margin-bottom: 24px; line-height: 1.6; }
+    .gate-badge-pending {
+        display: inline-block;
+        background: rgba(251, 191, 36, 0.15);
+        border: 1px solid rgba(251, 191, 36, 0.4);
+        color: #FBBF24;
+        border-radius: 999px;
+        padding: 4px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 16px;
+    }
+    .gate-badge-denied {
+        display: inline-block;
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #EF4444;
+        border-radius: 999px;
+        padding: 4px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 16px;
+    }
+    .gate-token { font-size: 11px; color: #475569; margin-top: 20px; word-break: break-all; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── 승인 대기 중 ──
+    if status == "pending":
+        st.markdown(f"""
+        <div class="gate-card">
+            <div class="gate-icon">⏳</div>
+            <div class="gate-title">승인 대기 중</div>
+            <div class="gate-badge-pending">📋 Pending</div>
+            <div class="gate-sub">
+                접속 신청이 접수되었습니다.<br>
+                관리자 승인 후 이용 가능합니다.<br>
+                이 페이지를 새로고침하여 승인 여부를 확인하세요.
+            </div>
+            <div class="gate-token">🔑 Token: {token[:16]}…</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.stop()
+
+    # ── 접근 거부 ──
+    if status == "denied":
+        st.markdown(f"""
+        <div class="gate-card">
+            <div class="gate-icon">🚫</div>
+            <div class="gate-title">접근이 거부되었습니다</div>
+            <div class="gate-badge-denied">❌ Denied</div>
+            <div class="gate-sub">
+                관리자가 귀하의 접속 신청을 거부했습니다.<br>
+                문의가 필요하시면 관리자에게 연락해 주세요.
+            </div>
+            <div class="gate-token">🔑 Token: {token[:16]}…</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.stop()
+
+    # ── 신규 접속 (unknown) — 신청 폼 ──
+    if not token:
+        st.markdown("""
+        <div class="gate-card">
+            <div class="gate-icon">⚠️</div>
+            <div class="gate-title">접근 토큰 없음</div>
+            <div class="gate-sub">페이지를 새로고침 해주세요.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.stop()
+
+    # status == "unknown" → 신청 폼
+    st.markdown("""
+    <div class="gate-card">
+        <div class="gate-icon">🎯</div>
+        <div class="gate-title">FiboAnalyzer</div>
+        <div class="gate-sub">
+            이 서비스는 <b>허가된 사용자만</b> 이용할 수 있습니다.<br>
+            아래 양식을 작성하여 접속을 신청해 주세요.<br>
+            관리자가 승인하면 이용하실 수 있습니다.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("access_request_form", clear_on_submit=False):
+        name = st.text_input("👤 이름 (닉네임)", placeholder="홍길동", max_chars=30)
+        reason = st.text_area("📝 접속 신청 이유", placeholder="예) 주식/코인 공부를 위해 사용하고 싶습니다.", max_chars=200, height=100)
+        submitted = st.form_submit_button("🙋 접속 신청하기", use_container_width=True, type="primary")
+
+    if submitted:
+        if not name.strip():
+            st.error("이름을 입력해 주세요.")
+            st.stop()
+        if not reason.strip():
+            st.error("신청 이유를 입력해 주세요.")
+            st.stop()
+        ok = access_manager.add_pending(token, name, reason)
+        if ok:
+            st.success(f"✅ '{name}' 님의 접속 신청이 완료되었습니다! 관리자 승인 후 이용 가능합니다.")
+        else:
+            st.info("이미 신청이 접수되어 있습니다. 관리자 승인을 기다려 주세요.")
+
+    # ── 관리자 직접 접속 (비밀번호 입력 시 즉시 승인) ──
+    with st.expander("🔑 관리자로 접속", expanded=False):
+        st.caption("관리자 비밀번호를 입력하면 이 브라우저에 즉시 접근 권한을 부여합니다.")
+        with st.form("admin_direct_login_form"):
+            admin_direct_pw = st.text_input("관리자 비밀번호", type="password", placeholder="비밀번호 입력")
+            admin_login_submitted = st.form_submit_button("🚀 관리자 접속", use_container_width=True)
+        if admin_login_submitted:
+            if access_manager.verify_admin_password(admin_direct_pw):
+                if token:
+                    db = access_manager.load_access_db(force_reload=True)
+                    if token not in db["approved"]:
+                        db["approved"].append(token)
+                        db["pending"] = [e for e in db["pending"] if e.get("token") != token]
+                        access_manager.save_access_db(db)
+                    st.success("✅ 관리자 접속 승인! 페이지를 새로고침하세요.")
+                    st.balloons()
+            else:
+                st.error("❌ 비밀번호가 올바르지 않습니다.")
+    st.stop()
+
+
+# 접근 제어 게이트 실행 (통과하지 못하면 st.stop()으로 이후 코드 실행 차단)
+_render_access_gate()
+
+
 
 
 # ────────────────────────────────────────────────────────────
@@ -1664,6 +1849,118 @@ with st.sidebar:
     if show_virtual_trading != st.session_state.show_virtual_trading:
         st.session_state.show_virtual_trading = show_virtual_trading
         save_ui_settings({"show_virtual_trading": show_virtual_trading})
+
+    # ────────────────────────────────────────────────────────────
+    # 🛡️ 관리자 패널 (접근 제어 관리)
+    # ────────────────────────────────────────────────────────────
+    st.write("---")
+    with st.expander("🛡️ 관리자 패널", expanded=False):
+        # 관리자 인증 세션 초기화
+        if "admin_authenticated" not in st.session_state:
+            st.session_state.admin_authenticated = False
+
+        if not st.session_state.admin_authenticated:
+            st.markdown("🔑 **관리자 비밀번호를 입력하세요**")
+            admin_pw = st.text_input("비밀번호", type="password", key="admin_pw_input_sidebar", label_visibility="collapsed", placeholder="관리자 비밀번호")
+            if st.button("🔓 인증", key="admin_auth_btn"):
+                if access_manager.verify_admin_password(admin_pw):
+                    st.session_state.admin_authenticated = True
+                    st.rerun()
+                else:
+                    st.error("❌ 비밀번호가 올바르지 않습니다.")
+        else:
+            # 로그아웃 버튼
+            col_admin_hdr, col_admin_logout = st.columns([0.7, 0.3])
+            col_admin_hdr.markdown("✅ **관리자 인증됨**")
+            if col_admin_logout.button("로그아웃", key="admin_logout_btn"):
+                st.session_state.admin_authenticated = False
+                st.rerun()
+
+            # ── 탭 구분 ──
+            tab_pending, tab_approved, tab_devopt = st.tabs(["📋 대기", "✅ 승인됨", "⚙️ 개발자 옵션"])
+
+            # ── 탭1: 승인 대기 목록 ──
+            with tab_pending:
+                pending_list = access_manager.get_pending_list()
+                if not pending_list:
+                    st.info("현재 승인 대기 중인 신청이 없습니다.")
+                else:
+                    st.markdown(f"**총 {len(pending_list)}건의 신청이 대기 중입니다.**")
+                    for entry in pending_list:
+                        with st.container():
+                            st.markdown(f"👤 **{entry.get('name', '?')}**  |  🕐 {entry.get('requested_at', '')}")
+                            st.caption(f"📝 {entry.get('reason', '')}")
+                            st.code(entry.get('token', ''), language=None)
+                            col_ap, col_dn = st.columns(2)
+                            tok = entry.get("token", "")
+                            if col_ap.button("✅ 승인", key=f"approve_{tok[:8]}"):
+                                access_manager.approve_user(tok)
+                                st.success(f"'{entry.get('name')}' 님을 승인했습니다.")
+                                st.rerun()
+                            if col_dn.button("❌ 거부", key=f"deny_{tok[:8]}"):
+                                access_manager.deny_user(tok)
+                                st.warning(f"'{entry.get('name')}' 님을 거부했습니다.")
+                                st.rerun()
+                            st.write("---")
+
+            # ── 탭2: 승인된 사용자 목록 ──
+            with tab_approved:
+                approved_list = access_manager.get_approved_list()
+                if not approved_list:
+                    st.info("승인된 사용자가 없습니다.")
+                else:
+                    st.markdown(f"**총 {len(approved_list)}명이 승인되어 있습니다.**")
+                    for i, tok in enumerate(approved_list):
+                        col_tok, col_rev = st.columns([0.75, 0.25])
+                        col_tok.code(tok[:20] + "…", language=None)
+                        if col_rev.button("🚫 박탈", key=f"revoke_{i}_{tok[:6]}"):
+                            access_manager.revoke_user(tok)
+                            st.warning("접근 권한을 박탈했습니다.")
+                            st.rerun()
+
+            # ── 탭3: 개발자 옵션 ──
+            with tab_devopt:
+                st.markdown("#### 🔐 관리자 비밀번호 변경")
+                old_pw = st.text_input("현재 비밀번호", type="password", key="devopt_old_pw")
+                new_pw = st.text_input("새 비밀번호", type="password", key="devopt_new_pw", placeholder="최소 6자 이상")
+                new_pw2 = st.text_input("새 비밀번호 확인", type="password", key="devopt_new_pw2")
+                if st.button("🔄 비밀번호 변경", key="devopt_change_pw_btn"):
+                    if new_pw != new_pw2:
+                        st.error("새 비밀번호가 일치하지 않습니다.")
+                    else:
+                        ok, msg = access_manager.change_admin_password(old_pw, new_pw)
+                        if ok:
+                            st.success(msg)
+                            # 세션 재인증 해제 (새 비밀번호로 다시 로그인하도록)
+                            st.session_state.admin_authenticated = False
+                            st.rerun()
+                        else:
+                            st.error(msg)
+
+                st.write("---")
+                st.markdown("#### 🗄️ 접근 DB 직접 관리")
+                if st.button("🔄 DB 강제 새로고침", key="devopt_reload_db_btn"):
+                    access_manager.load_access_db(force_reload=True)
+                    st.success("접근 DB를 디스크에서 다시 읽었습니다.")
+
+                db = access_manager.load_access_db(force_reload=True)
+                st.json(db, expanded=False)
+
+                st.write("---")
+                st.markdown("#### 🔑 내 접속 토큰 확인")
+                my_token = st.query_params.get("atoken", "(토큰 없음)")
+                st.code(my_token, language=None)
+                st.caption("이 토큰을 직접 approved 목록에 추가하려면 아래 버튼을 누르세요.")
+                if st.button("🚀 내 토큰 즉시 승인", key="devopt_self_approve_btn"):
+                    if my_token and my_token != "(토큰 없음)":
+                        db2 = access_manager.load_access_db(force_reload=True)
+                        if my_token not in db2["approved"]:
+                            db2["approved"].append(my_token)
+                            # pending에서도 제거
+                            db2["pending"] = [e for e in db2["pending"] if e.get("token") != my_token]
+                            access_manager.save_access_db(db2)
+                        st.success("✅ 토큰이 승인 목록에 추가되었습니다. 페이지를 새로고침하면 정상 접속됩니다.")
+
 # ────────────────────────────────────────────────────────────
 # 자산 전환에 따른 채팅 내역 초기화 (React DOM NotFoundError 방지 핵심)
 # ────────────────────────────────────────────────────────────
