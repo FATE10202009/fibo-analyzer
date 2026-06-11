@@ -656,30 +656,17 @@ UI_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui_
 # ────────────────────────────────────────────────────────────
 # 🔐 접근 제어 게이트 (Access Control Gate)
 # ────────────────────────────────────────────────────────────
-
-# 브라우저에서 UUID를 생성하고 쿼리 파라미터 ?atoken=xxx 에 넣는 JS
-components.html("""
-<script>
-(function() {
-    const parent = window.parent;
-    if (!parent || !parent.location) return;
-    const url = new URL(parent.location.href);
-    if (!url.searchParams.has('atoken')) {
-        // 랜덤 UUID v4 생성
-        const uuid = ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
-            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-        );
-        url.searchParams.set('atoken', uuid);
-        parent.location.replace(url.toString());
-    }
-})();
-</script>
-""", height=0)
+import secrets as _secrets
 
 def _render_access_gate():
     """접근 제어 게이트를 렌더링합니다. 승인된 사용자만 통과합니다."""
+    # 토큰이 없으면 Python에서 직접 생성하여 URL에 기록
     token = st.query_params.get("atoken", "")
-    status = access_manager.check_access(token) if token else "unknown"
+    if not token:
+        token = _secrets.token_urlsafe(24)
+        st.query_params["atoken"] = token
+        st.rerun()
+    status = access_manager.check_access(token)
 
     # ── 승인됨: 정상 통과 ──
     if status == "approved":
@@ -735,7 +722,7 @@ def _render_access_gate():
     </style>
     """, unsafe_allow_html=True)
 
-    # ── 승인 대기 중 ──
+    # ── 각 상태에 따른 중앙 카드/폼 렌더링 ──
     if status == "pending":
         st.markdown(f"""
         <div class="gate-card">
@@ -745,15 +732,13 @@ def _render_access_gate():
             <div class="gate-sub">
                 접속 신청이 접수되었습니다.<br>
                 관리자 승인 후 이용 가능합니다.<br>
-                이 페이지를 새로고침하여 승인 여부를 확인하세요.
+                이 페이지를 새로고침하거나 관리자 승인을 기다려 주세요.
             </div>
             <div class="gate-token">🔑 Token: {token[:16]}…</div>
         </div>
         """, unsafe_allow_html=True)
-        st.stop()
 
-    # ── 접근 거부 ──
-    if status == "denied":
+    elif status == "denied":
         st.markdown(f"""
         <div class="gate-card">
             <div class="gate-icon">🚫</div>
@@ -766,51 +751,43 @@ def _render_access_gate():
             <div class="gate-token">🔑 Token: {token[:16]}…</div>
         </div>
         """, unsafe_allow_html=True)
-        st.stop()
 
-    # ── 신규 접속 (unknown) — 신청 폼 ──
-    if not token:
+    else:
+        # status == "unknown" → 신청 폼
         st.markdown("""
         <div class="gate-card">
-            <div class="gate-icon">⚠️</div>
-            <div class="gate-title">접근 토큰 없음</div>
-            <div class="gate-sub">페이지를 새로고침 해주세요.</div>
+            <div class="gate-icon">🎯</div>
+            <div class="gate-title">FiboAnalyzer</div>
+            <div class="gate-sub">
+                이 서비스는 <b>허가된 사용자만</b> 이용할 수 있습니다.<br>
+                아래 양식을 작성하여 접속을 신청해 주세요.<br>
+                관리자가 승인하면 이용하실 수 있습니다.
+            </div>
         </div>
         """, unsafe_allow_html=True)
-        st.stop()
 
-    # status == "unknown" → 신청 폼
-    st.markdown("""
-    <div class="gate-card">
-        <div class="gate-icon">🎯</div>
-        <div class="gate-title">FiboAnalyzer</div>
-        <div class="gate-sub">
-            이 서비스는 <b>허가된 사용자만</b> 이용할 수 있습니다.<br>
-            아래 양식을 작성하여 접속을 신청해 주세요.<br>
-            관리자가 승인하면 이용하실 수 있습니다.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        with st.form("access_request_form", clear_on_submit=False):
+            name = st.text_input("👤 이름 (닉네임)", placeholder="홍길동", max_chars=30)
+            reason = st.text_area("📝 접속 신청 이유", placeholder="예) 주식/코인 공부를 위해 사용하고 싶습니다.", max_chars=200, height=100)
+            submitted = st.form_submit_button("🙋 접속 신청하기", use_container_width=True, type="primary")
 
-    with st.form("access_request_form", clear_on_submit=False):
-        name = st.text_input("👤 이름 (닉네임)", placeholder="홍길동", max_chars=30)
-        reason = st.text_area("📝 접속 신청 이유", placeholder="예) 주식/코인 공부를 위해 사용하고 싶습니다.", max_chars=200, height=100)
-        submitted = st.form_submit_button("🙋 접속 신청하기", use_container_width=True, type="primary")
+        if submitted:
+            if not name.strip():
+                st.error("이름을 입력해 주세요.")
+                st.stop()
+            if not reason.strip():
+                st.error("신청 이유를 입력해 주세요.")
+                st.stop()
+            ok = access_manager.add_pending(token, name, reason)
+            if ok:
+                st.success(f"✅ '{name}' 님의 접속 신청이 완료되었습니다! 관리자 승인 후 이용 가능합니다.")
+                st.rerun()
+            else:
+                st.info("이미 신청이 접수되어 있습니다. 관리자 승인을 기다려 주세요.")
 
-    if submitted:
-        if not name.strip():
-            st.error("이름을 입력해 주세요.")
-            st.stop()
-        if not reason.strip():
-            st.error("신청 이유를 입력해 주세요.")
-            st.stop()
-        ok = access_manager.add_pending(token, name, reason)
-        if ok:
-            st.success(f"✅ '{name}' 님의 접속 신청이 완료되었습니다! 관리자 승인 후 이용 가능합니다.")
-        else:
-            st.info("이미 신청이 접수되어 있습니다. 관리자 승인을 기다려 주세요.")
-
-    # ── 관리자 직접 접속 (비밀번호 입력 시 즉시 승인) ──
+    # ── 공통: 관리자 직접 접속 (비밀번호 입력 시 즉시 승인) ──
+    # pending, denied, unknown 모든 상태에서 하단에 표시되도록 이 곳에 배치합니다.
+    st.markdown("<br><br>", unsafe_allow_html=True)
     with st.expander("🔑 관리자로 접속", expanded=False):
         st.caption("관리자 비밀번호를 입력하면 이 브라우저에 즉시 접근 권한을 부여합니다.")
         with st.form("admin_direct_login_form"):
@@ -822,10 +799,13 @@ def _render_access_gate():
                     db = access_manager.load_access_db(force_reload=True)
                     if token not in db["approved"]:
                         db["approved"].append(token)
+                        # pending 이나 denied 에서 제거
                         db["pending"] = [e for e in db["pending"] if e.get("token") != token]
+                        db["denied"] = [t for t in db["denied"] if t != token]
                         access_manager.save_access_db(db)
-                    st.success("✅ 관리자 접속 승인! 페이지를 새로고침하세요.")
+                    st.success("✅ 관리자 접속 승인!")
                     st.balloons()
+                    st.rerun()
             else:
                 st.error("❌ 비밀번호가 올바르지 않습니다.")
     st.stop()
