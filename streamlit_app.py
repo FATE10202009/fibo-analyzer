@@ -2255,50 +2255,21 @@ with main_container:
                 options=chart_options,
                 horizontal=True,
                 label_visibility="collapsed",
-                key=f"chart_tab_selector_{results['ticker']}"
+                key=f"chart_tab_selector_{results['ticker']}",
+                help="""💡 피보나치 타임프레임별 설명:
+- 🌐 L (장기 대파동): 전체 역사적 최고점/최저점 기준으로 분석한 대파동 피보나치 레벨입니다. 역사적인 장기 지지 및 저항 구간을 판별하는 데 사용됩니다.
+- 📅 M (중기 스윙): 최근 180일 또는 L 스케일 사이의 범위를 기준으로 산출된 중기 스윙 투자 분석용 피보나치 레벨입니다.
+- 📆 S (단기 변곡): 최근 30일 또는 M 스케일 사이의 중첩 범위를 기준으로 한 단기 매매용 피보나치 지지 및 저항 레벨입니다.
+- ⏰ XS (초단기 극세): 최근 7~14일 또는 S 스케일 사이의 미세한 변동 범위를 기준으로 추출한 초단기 및 데이트레이딩용 피보나치 레벨입니다.
+- ⏳ T (어제 하루 범위): 어제 단 하루의 고점과 저점을 기준으로 계산한 초단기 당일 변곡 및 지지선입니다."""
             )
             
-            # 피보나치 레벨 표시 체크박스 (설명 마우스 오버 툴팁 제공)
-            show_l, show_m, show_s, show_xs, show_t = False, False, False, False, False
-            if active_chart_tab in ["🌐 All-Time (L)", "📅 180일 스윙 (M)", "📆 30일 단기 (S)", "⏰ 7일 초단기 (XS)"]:
-                st.markdown("<div style='font-size:12px; font-weight:600; color:#94A3B8; margin-top:8px; margin-bottom:4px;'>📐 피보나치 레벨 표시 설정 (각 항목에 마우스를 올리면 상세 설명이 나타납니다)</div>", unsafe_allow_html=True)
-                col_l, col_m, col_s, col_xs, col_t = st.columns(5)
-                with col_l:
-                    show_l = st.checkbox(
-                        "🌐 L (장기 대파동)",
-                        value=True if active_chart_tab == "🌐 All-Time (L)" else False,
-                        key=f"show_l_chk_{results['ticker']}",
-                        help="🌐 L (장기 대파동): 전체 역사적 최고점/최저점을 기준으로 분석한 대파동 피보나치 레벨입니다. 역사적인 장기 지지 및 저항 구간을 판별하는 데 사용됩니다."
-                    )
-                with col_m:
-                    show_m = st.checkbox(
-                        "📅 M (중기 스윙)",
-                        value=True if active_chart_tab == "📅 180일 스윙 (M)" else False,
-                        key=f"show_m_chk_{results['ticker']}",
-                        help="📅 M (중기 스윙): 최근 180일 또는 L 스케일 사이의 범위를 기준으로 산출된 중기 스윙 투자 분석용 피보나치 레벨입니다."
-                    )
-                with col_s:
-                    show_s = st.checkbox(
-                        "📆 S (단기 변곡)",
-                        value=True if active_chart_tab == "📆 30일 단기 (S)" else False,
-                        key=f"show_s_chk_{results['ticker']}",
-                        help="📆 S (단기 변곡): 최근 30일 또는 M 스케일 사이의 중첩 범위를 기준으로 한 단기 매매용 피보나치 지지 및 저항 레벨입니다."
-                    )
-                with col_xs:
-                    show_xs = st.checkbox(
-                        "⏰ XS (초단기 극세)",
-                        value=True if active_chart_tab == "⏰ 7일 초단기 (XS)" else False,
-                        key=f"show_xs_chk_{results['ticker']}",
-                        help="⏰ XS (초단기 극세): 최근 7~14일 또는 S 스케일 사이의 미세한 변동 범위를 기준으로 추출한 초단기 및 데이트레이딩용 피보나치 레벨입니다."
-                    )
-                with col_t:
-                    show_t = st.checkbox(
-                        "⏳ T (어제 하루 범위)",
-                        value=False,
-                        key=f"show_t_chk_{results['ticker']}",
-                        help="⏳ T (어제 하루 범위): 어제 단 하루 동안의 고점과 저점을 기준으로 계산하여 오늘 당일의 돌파 또는 극단적 지지 저항을 확인하는 초단기 레벨입니다."
-                    )
-                st.write("")
+            # 피보나치 레벨 표시 설정 (라디오 탭 선택에 따라 자동 지정)
+            show_l = (active_chart_tab == "🌐 All-Time (L)")
+            show_m = (active_chart_tab == "📅 180일 스윙 (M)")
+            show_s = (active_chart_tab == "📆 30일 단기 (S)")
+            show_xs = (active_chart_tab == "⏰ 7일 초단기 (XS)")
+            show_t = False
 
             # 활성화된 탭의 차트만 단독 렌더링하여 탭 전환 시 줌이 강제 초기화(원복)되도록 처리
             if active_chart_tab == "🌐 All-Time (L)":
