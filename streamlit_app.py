@@ -9,6 +9,8 @@ import json
 import traceback
 import streamlit.components.v1 as components
 import datetime
+import base64
+import hashlib
 
 
 # 프로젝트 핵심 분석 모듈 임포트
@@ -532,6 +534,41 @@ components.html(
                 hangulBuffer = [];
             }
         });
+
+        // ────────────────────────────────────────────────────────────
+        // 🔐 브라우저 localStorage 프로필 동기화 브릿지
+        // ────────────────────────────────────────────────────────────
+        (function syncProfile() {
+            const parent = window.parent;
+            if (!parent || !parent.location) return;
+
+            const url = new URL(parent.location.href);
+
+            // 1. URL에 profile_data가 있으면 localStorage에 저장(동기화)하고 종료
+            if (url.searchParams.has('profile_data')) {
+                const pname = url.searchParams.get('profile_name') || 'default';
+                const pdata = url.searchParams.get('profile_data');
+                try {
+                    localStorage.setItem('fibo_last_profile', pname);
+                    localStorage.setItem('fibo_profile_' + pname, pdata);
+                } catch(e) {}
+                return; // 이미 profile_data가 URL에 있으므로 리다이렉트 불필요
+            }
+
+            // 2. URL에 profile_data가 없으면 localStorage에서 복원 시도
+            try {
+                const lastProfile = localStorage.getItem('fibo_last_profile');
+                if (lastProfile) {
+                    const pdata = localStorage.getItem('fibo_profile_' + lastProfile);
+                    if (pdata) {
+                        url.searchParams.set('profile_name', lastProfile);
+                        url.searchParams.set('profile_data', pdata);
+                        // 리다이렉트 (Streamlit이 URL 파라미터를 읽어 설정 복원)
+                        parent.location.replace(url.toString());
+                    }
+                }
+            } catch(e) {}
+        })();
     </script>
     """,
     height=0
@@ -613,6 +650,82 @@ st.markdown("""
 FAVORITES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "favorites_web.json")
 LAST_USER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_virtual_user.txt")
 UI_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui_settings.json")
+
+
+# ────────────────────────────────────────────────────────────
+# 🔐 사용자 프로필 시스템 (브라우저 localStorage 연동)
+# ────────────────────────────────────────────────────────────
+def _xor_bytes(data: bytes, password: str) -> bytes:
+    """XOR 암호화/복호화 (대칭 연산)"""
+    key = hashlib.sha256(password.encode('utf-8')).digest()
+    return bytes([data[i] ^ key[i % len(key)] for i in range(len(data))])
+
+def encode_profile_data(settings: dict, password: str = "") -> str:
+    """설정 딕셔너리를 URL-safe base64 문자열로 인코딩 (비밀번호 있으면 암호화)"""
+    data_bytes = json.dumps(settings, ensure_ascii=False).encode('utf-8')
+    if password:
+        encrypted = _xor_bytes(data_bytes, password)
+        return "enc:" + base64.urlsafe_b64encode(encrypted).decode('ascii')
+    else:
+        return "raw:" + base64.urlsafe_b64encode(data_bytes).decode('ascii')
+
+def decode_profile_data(encoded: str, password: str = "") -> dict:
+    """base64 문자열을 설정 딕셔너리로 복원 (실패 시 None 반환)"""
+    try:
+        if encoded.startswith("enc:"):
+            if not password:
+                return None  # 비밀번호 필요
+            encrypted = base64.urlsafe_b64decode(encoded[4:])
+            decrypted = _xor_bytes(encrypted, password)
+            return json.loads(decrypted.decode('utf-8'))
+        elif encoded.startswith("raw:"):
+            return json.loads(base64.urlsafe_b64decode(encoded[4:]).decode('utf-8'))
+        else:
+            # 구형 포맷 호환
+            return json.loads(base64.urlsafe_b64decode(encoded).decode('utf-8'))
+    except Exception:
+        return None
+
+def get_current_profile_settings() -> dict:
+    """현재 세션의 모든 설정을 딕셔너리로 수집"""
+    favs_str = "|".join([f"{n}:{t}" for n, t in st.session_state.get("favorites", [])])
+    tg_token, tg_chat_id = alert_manager.get_token_and_chat_id()
+    return {
+        "favorites": favs_str,
+        "tg_token": tg_token,
+        "tg_chat_id": tg_chat_id,
+        "show_virtual_trading": st.session_state.get("show_virtual_trading", True),
+        "virtual_user_id": st.session_state.get("virtual_user_id", "guest"),
+        "gemini_api_key": st.session_state.get("_saved_gemini_api_key", ""),
+        "saved_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    }
+
+def apply_profile_settings(settings: dict):
+    """프로필 설정 딕셔너리를 세션 상태 및 각 서브시스템에 적용"""
+    # 즐겨찾기 적용
+    if settings.get("favorites"):
+        parsed = []
+        for item in settings["favorites"].split("|"):
+            if ":" in item:
+                name, ticker = item.split(":", 1)
+                parsed.append((name.strip().upper(), ticker.strip().upper()))
+        if parsed:
+            st.session_state.favorites = parsed
+    # 텔레그램 설정 적용
+    if settings.get("tg_token") is not None or settings.get("tg_chat_id") is not None:
+        alert_manager.set_telegram_config(
+            settings.get("tg_token", ""),
+            settings.get("tg_chat_id", "")
+        )
+    # UI 설정 적용
+    if "show_virtual_trading" in settings:
+        st.session_state.show_virtual_trading = bool(settings["show_virtual_trading"])
+    # 가상 매매 닉네임
+    if settings.get("virtual_user_id"):
+        st.session_state.virtual_user_id = settings["virtual_user_id"]
+    # Gemini API Key
+    if settings.get("gemini_api_key"):
+        st.session_state["_saved_gemini_api_key"] = settings["gemini_api_key"]
 
 def load_ui_settings():
     """마지막으로 저장된 UI 설정(화면 표시 옵션 등)을 파일에서 불러옵니다."""
@@ -843,6 +956,28 @@ if "virtual_user_id" not in st.session_state:
             except:
                 pass
         st.session_state.virtual_user_id = last_user
+
+# ────────────────────────────────────────────────────────────
+# 🔐 프로필 자동 복원 (URL params에서 profile_data 읽기)
+# ────────────────────────────────────────────────────────────
+if "_profile_applied" not in st.session_state:
+    st.session_state._profile_applied = False
+
+if not st.session_state._profile_applied:
+    _profile_data_raw = st.query_params.get("profile_data", "")
+    _profile_name_raw = st.query_params.get("profile_name", "")
+    if _profile_data_raw:
+        # 비밀번호가 필요한 경우 — 먼저 비밀번호 없이 시도(raw), 안 되면 보류
+        _decoded = decode_profile_data(_profile_data_raw, "")
+        if _decoded:  # raw(비밀번호 없음) 성공
+            apply_profile_settings(_decoded)
+            st.session_state._profile_applied = True
+            st.session_state._profile_name = _profile_name_raw
+            st.session_state._profile_is_encrypted = False
+        else:  # enc(비밀번호 있음) — 비밀번호 대기 상태
+            st.session_state._profile_pending_data = _profile_data_raw
+            st.session_state._profile_name = _profile_name_raw
+            st.session_state._profile_is_encrypted = True
 
 
 # ────────────────────────────────────────────────────────────
@@ -1301,15 +1436,120 @@ def render_virtual_trading_panel(results):
 with st.sidebar:
     st.markdown('<h2 style="color:#60A5FA; margin-bottom: 2px;">🎯 FiboAnalyzer</h2>', unsafe_allow_html=True)
     st.markdown('<p style="color:#64748B; font-size:12px; margin-bottom: 25px;">Multi-Timeframe Fibonacci & AI Agent</p>', unsafe_allow_html=True)
-    
+
+    # ────────────────────────────────────────────────────────────
+    # 👤 사용자 프로필 관리 (설정 영구 저장 / 재부팅 시 복원)
+    # ────────────────────────────────────────────────────────────
+    with st.expander("👤 내 프로필 저장 / 불러오기", expanded=bool(st.session_state.get("_profile_is_encrypted"))):
+        # 프로필 상태 배지 표시
+        _pname = st.session_state.get("_profile_name", "")
+        _papplied = st.session_state.get("_profile_applied", False)
+        _penc = st.session_state.get("_profile_is_encrypted", False)
+
+        if _papplied and _pname:
+            st.success(f"✅ **{_pname}** 프로필이 복원되었습니다.")
+        elif _penc and _pname:
+            st.warning(f"🔐 **{_pname}** 프로필이 암호화되어 있습니다. 비밀번호를 입력 후 불러오기를 눌러 주세요.")
+
+        _prof_name_in = st.text_input(
+            "프로필 이름 (ID)",
+            value=_pname or "myprofile",
+            placeholder="내 프로필",
+            key="profile_name_widget"
+        )
+        _prof_pwd_in = st.text_input(
+            "비밀번호 (선택 — 없으면 평문 저장)",
+            type="password",
+            placeholder="비워두면 암호화 없음",
+            key="profile_pwd_widget"
+        )
+
+        _col_load, _col_save = st.columns(2)
+
+        # 🔐 불러오기: 암호화된 pending 데이터가 있으면 비밀번호로 복호화
+        with _col_load:
+            if st.button("🔐 불러오기", key="profile_load_btn", use_container_width=True):
+                _pending = st.session_state.get("_profile_pending_data", "")
+                if _pending:
+                    _decoded = decode_profile_data(_pending, _prof_pwd_in)
+                    if _decoded:
+                        apply_profile_settings(_decoded)
+                        st.session_state._profile_applied = True
+                        st.session_state._profile_is_encrypted = False
+                        st.session_state._profile_name = _prof_name_in
+                        st.session_state.pop("_profile_pending_data", None)
+                        st.toast("✅ 프로필이 복원되었습니다!", icon="✅")
+                        st.rerun()
+                    else:
+                        st.error("❌ 비밀번호가 틀렸습니다.")
+                else:
+                    st.info("불러올 프로필이 없습니다. 먼저 저장하거나 가져오기를 사용하세요.")
+
+        # 💾 저장하기: 현재 설정 → URL params → JS가 localStorage에 동기화
+        with _col_save:
+            if st.button("💾 저장하기", key="profile_save_btn", use_container_width=True):
+                _settings = get_current_profile_settings()
+                _encoded = encode_profile_data(_settings, _prof_pwd_in)
+                st.query_params["profile_name"] = _prof_name_in
+                st.query_params["profile_data"] = _encoded
+                st.session_state._profile_name = _prof_name_in
+                st.session_state._profile_applied = True
+                st.session_state._profile_is_encrypted = bool(_prof_pwd_in)
+                st.toast(f"💾 **{_prof_name_in}** 프로필이 저장되었습니다! (브라우저에 기억됨)", icon="💾")
+
+        st.write("---")
+        st.caption("📋 내보내기 코드 — 다른 기기/브라우저에서 설정 복원 시 사용")
+        if st.button("📋 내보내기 코드 생성", key="profile_export_btn", use_container_width=True):
+            _exp_settings = get_current_profile_settings()
+            st.session_state._export_code = encode_profile_data(_exp_settings, _prof_pwd_in)
+        if st.session_state.get("_export_code"):
+            st.text_area(
+                "아래 코드를 복사하세요:",
+                value=st.session_state._export_code,
+                height=80,
+                key="export_code_display_widget"
+            )
+            st.caption("⚠️ 이 코드를 안전한 곳에 보관하세요.")
+
+        st.write("---")
+        st.caption("📥 가져오기 — 다른 기기의 내보내기 코드를 붙여넣어 설정 복원")
+        _import_code = st.text_area(
+            "설정 코드 붙여넣기:",
+            height=80,
+            key="import_code_widget",
+            placeholder="enc:... 또는 raw:... 로 시작하는 코드를 붙여넣으세요"
+        )
+        if st.button("📥 설정 복원", key="profile_import_btn", use_container_width=True):
+            if _import_code.strip():
+                _imp_decoded = decode_profile_data(_import_code.strip(), _prof_pwd_in)
+                if _imp_decoded:
+                    apply_profile_settings(_imp_decoded)
+                    # URL params에도 저장하여 localStorage 동기화 트리거
+                    st.query_params["profile_name"] = _prof_name_in
+                    st.query_params["profile_data"] = _import_code.strip()
+                    st.session_state._profile_applied = True
+                    st.session_state._profile_name = _prof_name_in
+                    st.session_state._export_code = ""
+                    st.toast("✅ 설정이 복원되었습니다!", icon="✅")
+                    st.rerun()
+                else:
+                    st.error("❌ 코드를 해독하지 못했습니다. 비밀번호를 확인해 주세요.")
+            else:
+                st.warning("코드를 먼저 붙여넣어 주세요.")
+
+    st.write("")
     st.subheader("🔑 API KEY 설정")
     user_api_key = st.text_input(
         "Gemini API Key", 
-        type="password", 
+        type="password",
+        value=st.session_state.get("_saved_gemini_api_key", ""),
         placeholder="AIzaSy... 형식의 키를 입력해 주세요.",
-        help="Google AI Studio에서 발급받은 본인의 API 키를 입력해 주세요. 입력한 키는 서버에 저장되지 않고 브라우저에만 유지됩니다."
+        help="Google AI Studio에서 발급받은 본인의 API 키를 입력해 주세요. 프로필 저장 시 함께 저장됩니다."
     )
-    
+    # API 키가 입력되면 세션에 기억 (프로필 저장 시 포함됨)
+    if user_api_key:
+        st.session_state["_saved_gemini_api_key"] = user_api_key
+
     if not user_api_key:
         st.info("💡 API 키를 입력하지 않으시면 AI 뉴스 분석 및 Q&A 기능 대신 기본 분석 템플릿(폴백)으로 출력됩니다.")
         
