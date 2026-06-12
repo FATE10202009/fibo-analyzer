@@ -295,33 +295,23 @@ def _render_access_gate():
     </script>
 
     """, height=0)
-
     status = access_manager.check_access(token)
 
-    # ── 승인됨: 정상 통과 ──
-
-    if status == "approved":
-
-        # 토큰에 해당하는 user_id를 찾아 세션 상태에 기록
-
+    # ── [자동 로그인 및 상태 확인] ──
+    # 세션에 로그인 정보가 없고, 현재 브라우저 토큰이 승인된 토큰인 경우 자동 로그인 시도
+    if not st.session_state.get("logged_in_user") and status == "approved":
         uid = access_manager.get_user_id_by_token(token)
-
         if uid:
-
             st.session_state.logged_in_user = uid
-
-            # 사용자 설정을 1회 로드하여 적용
-
             if not st.session_state.get("_user_settings_loaded", False):
-
                 user_settings = access_manager.get_user_settings(uid)
-
                 if user_settings:
-
                     apply_profile_settings(user_settings)
-
                 st.session_state._user_settings_loaded = True
 
+    # ── 로그인 완료: 정상 통과 ──
+    # 세션에 로그인 정보(logged_in_user)가 확실히 설정되어야만 게이트를 통과시킵니다.
+    if st.session_state.get("logged_in_user"):
         return
 
     # ── 공통 스타일 ──
