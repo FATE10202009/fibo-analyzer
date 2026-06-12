@@ -2452,8 +2452,8 @@ with main_container:
 
                 # 활성화된 탭의 차트만 단독 렌더링하여 탭 전환 시 줌이 강제 초기화(원복)되도록 처리
                 if active_chart_tab == "🌐 All-Time (L)":
-                    l_actual_high = float(results['df_all']['High'].max())
-                    l_actual_low = float(results['df_all']['Low'].min())
+                    l_actual_high = float(results['l_high'])
+                    l_actual_low = float(results['l_low'])
                     fig_l = create_plotly_candlestick_chart(
                         df=results['df_all'].copy(),
                         title=f"L Size: All-Time / 고점: {fmt_chart_val(l_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(l_actual_low, results['is_usd'])} / 현재가 위치: {results['l_pos']:.1f}%",
@@ -2465,8 +2465,8 @@ with main_container:
                         st.plotly_chart(fig_l, use_container_width=True, key=f"plotly_chart_l_size_{results['ticker']}", config={'scrollZoom': False})
                     
                 elif active_chart_tab == "📅 180일 스윙 (M)":
-                    m_actual_high = float(results['df_m']['High'].max())
-                    m_actual_low = float(results['df_m']['Low'].min())
+                    m_actual_high = float(results['m_high'])
+                    m_actual_low = float(results['m_low'])
                     fig_m = create_plotly_candlestick_chart(
                         df=results['df_m'],
                         title=f"M Size (최근 180봉) / 고점: {fmt_chart_val(m_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(m_actual_low, results['is_usd'])} / 현재가 위치: {results['m_pos']:.1f}%",
@@ -2480,8 +2480,8 @@ with main_container:
                         st.plotly_chart(fig_m, use_container_width=True, key=f"plotly_chart_m_size_{results['ticker']}", config={'scrollZoom': False})
                     
                 elif active_chart_tab == "📆 30일 단기 (S)":
-                    s_actual_high = float(results['df_s']['High'].max())
-                    s_actual_low = float(results['df_s']['Low'].min())
+                    s_actual_high = float(results['s_high'])
+                    s_actual_low = float(results['s_low'])
                     fig_s = create_plotly_candlestick_chart(
                         df=results['df_s'],
                         title=f"S Size (최근 30봉) / 고점: {fmt_chart_val(s_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(s_actual_low, results['is_usd'])} / 현재가 위치: {results['s_pos']:.1f}%",
@@ -2494,8 +2494,8 @@ with main_container:
                         st.plotly_chart(fig_s, use_container_width=True, key=f"plotly_chart_s_size_{results['ticker']}", config={'scrollZoom': False})
                     
                 elif active_chart_tab == "⏰ 7일 초단기 (XS)":
-                    xs_actual_high = float(results['df_xs']['High'].max())
-                    xs_actual_low = float(results['df_xs']['Low'].min())
+                    xs_actual_high = float(results['xs_high'])
+                    xs_actual_low = float(results['xs_low'])
                     fig_xs = create_plotly_candlestick_chart(
                         df=results['df_xs'],
                         title=f"XS Size (최근 14봉) / 고점: {fmt_chart_val(xs_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(xs_actual_low, results['is_usd'])} / 현재가 위치: {results['xs_pos']:.1f}%",
