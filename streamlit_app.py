@@ -429,6 +429,7 @@ TICKER_KOREAN_NAMES = {
     "005930.KS": "삼성전자",
     "035720.KS": "카카오",
     "035420.KS": "네이버",
+    "103590.KS": "일진전기",
 }
 
 def get_asset_korean_name(ticker, english_name=""):
@@ -1329,7 +1330,7 @@ with st.sidebar:
     st.write("⭐ 즐겨찾기 빠른 로드")
     for idx, (name, val) in enumerate(st.session_state.favorites):
         ko_name = get_asset_korean_name(val, name)
-        display_name = f"{val} ({ko_name})" if ko_name and ko_name.upper() != val.upper() else val
+        display_name = f"{val}({ko_name})" if ko_name and ko_name.upper() != val.upper() else val
         # 자산 변경 클릭 시 세션 상태를 변경하고 리프레시하여 DOM 충돌 방지
         if st.button(display_name, key=f"fav_btn_{idx}_{val}", use_container_width=True):
             st.session_state.search_ticker = val
