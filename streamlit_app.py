@@ -579,7 +579,7 @@ def _render_access_gate():
 
                     ok, msg, user_token = access_manager.login_with_id_password(
 
-                        login_id.strip(), login_pw
+                        login_id.strip(), login_pw, token
 
                     )
 

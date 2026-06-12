@@ -346,9 +346,10 @@ def create_user_account(user_id: str, password: str, token: str) -> tuple[bool, 
     return True, f"✅ '{user_id}' 계정이 생성되었습니다."
 
 
-def login_with_id_password(user_id: str, password: str) -> tuple[bool, str, str]:
+def login_with_id_password(user_id: str, password: str, current_token: str = "") -> tuple[bool, str, str]:
     """
     아이디 + 비밀번호로 로그인을 시도합니다.
+    current_token이 제공되면 계정의 토큰을 현재 브라우저의 토큰으로 동기화합니다.
     Returns: (성공 여부, 메시지, 해당 계정의 token)
     """
     user_id = user_id.strip()
@@ -362,13 +363,19 @@ def login_with_id_password(user_id: str, password: str) -> tuple[bool, str, str]
     if _hash_password(password) != stored_hash:
         return False, "아이디 또는 비밀번호가 올바르지 않습니다.", ""
 
-    token = users[user_id].get("token", "")
+    # 현재 로그인한 브라우저의 토큰이 있으면 계정의 토큰을 업데이트
+    if current_token:
+        users[user_id]["token"] = current_token
+
+    token = current_token if current_token else users[user_id].get("token", "")
+    
     # 토큰이 approved에 없으면 자동 추가
     if token and token not in db.get("approved", []):
         db.setdefault("approved", []).append(token)
         db["pending"] = [e for e in db.get("pending", []) if e.get("token") != token]
         db["denied"] = [t for t in db.get("denied", []) if t != token]
-        save_access_db(db)
+        
+    save_access_db(db)
 
     return True, f"✅ '{user_id}' 님, 환영합니다!", token
 
