@@ -31,21 +31,34 @@ def filter_quote_by_market(quotes, market_option):
     # 매칭되는 것이 없을 경우 차선책으로 1순위 리턴
     return quotes[0]
 
-def translate_to_english(text):
-    """구글 번역 무료 API를 사용하여 한글을 영어로 변환합니다."""
+def translate_and_romanize(text):
+    """구글 번역 무료 API를 사용하여 한글을 영어로 변환하고, 로마자 음역(발음) 표기도 가져옵니다."""
     try:
         encoded = urllib.parse.quote(text)
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q={encoded}"
+        # dt=t(번역) 및 dt=rm(로마자 표기) 파라미터를 추가하여 호출합니다.
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&dt=rm&q={encoded}"
         req = urllib.request.Request(url, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode('utf-8'))
-            translated = data[0][0][0]
-            return translated.strip()
+            translated = None
+            romanized = None
+            
+            if data and data[0]:
+                for item in data[0]:
+                    if isinstance(item, list) and len(item) >= 4:
+                        if item[0] is not None and item[1] is not None:
+                            translated = item[0]
+                        elif item[3] is not None:
+                            romanized = item[3]
+            if not translated and data and data[0] and data[0][0]:
+                translated = data[0][0][0]
+                
+            return (translated.strip() if translated else None), (romanized.strip() if romanized else None)
     except Exception as e:
-        print(f"번역 실패: {e}")
-        return None
+        print(f"번역 및 로마자 변환 실패: {e}")
+        return None, None
 
 def _try_yfinance_search(search_term, market_opt, original_query):
     """주어진 검색어로 yfinance Search를 수행하고 티커를 반환합니다. 실패 시 None."""
@@ -73,11 +86,9 @@ def search_ticker_by_name(query, market_opt="all"):
     1. 순수 티커 판별 → 즉시 반환
     2. 영문 검색어면 yfinance 직접 검색
     3. 한글인 경우:
-       (a) 구글 번역 결과로 검색
-       (b) 번역 결과 단어 조합 변형 ("Inc" 제거 등)으로 재시도
-       (c) 음역어 처리: 번역이 부정확할 수 있으므로 번역 결과를
-           핵심 단어만 추출하여 재검색
-    실패 시 None 반환 → 한글 텍스트가 yfinance.download로 넘어가지 않도록 차단
+       (a) 구글 번역 결과 및 로마자 발음 표기 조합으로 검색
+       (b) 핵심 단어 조합 및 단어 변형으로 재시도
+    실패 시 None 반환
     """
     cleaned_query = query.strip()
     if not cleaned_query:
@@ -106,30 +117,46 @@ def search_ticker_by_name(query, market_opt="all"):
         print(f"[검색 실패] '{cleaned_query}'에 해당하는 자산을 찾지 못했습니다.")
         return None
 
-    # 3. 한글인 경우: 구글 번역 후 다양한 조합으로 시도
-    translated = translate_to_english(cleaned_query)
+    # 3. 한글인 경우: 구글 번역 및 로마자 발음 표기 조합으로 시도
+    translated, romanized = translate_and_romanize(cleaned_query)
     if not translated:
         print(f"[번역 실패] '{cleaned_query}' 번역에 실패하여 검색을 중단합니다.")
         return None
 
-    print(f"[번역] '{cleaned_query}' → '{translated}'")
+    print(f"[번역] '{cleaned_query}' → 번역: '{translated}', 음역: '{romanized}'")
 
     stop_words = {'inc', 'inc.', 'corp', 'corp.', 'ltd', 'ltd.', 'co', 'co.', 'llc', 'group', 'the'}
-    trans_words = translated.split()
-    core_words = [w for w in trans_words if w.lower() not in stop_words]
-    core_query = ' '.join(core_words)
+    
+    candidates = []
+    
+    # 후보 1: 번역본 (예: "cacao" 또는 "Samsung Electronics")
+    if translated:
+        candidates.append(translated)
+        
+    # 후보 2: 로마자 발음 표기 (예: "kakao" 또는 "samseongjeonja")
+    if romanized and romanized.lower() != translated.lower():
+        candidates.append(romanized)
 
-    candidates = [translated]
-    if core_query and core_query != translated:
-        candidates.append(core_query)
-    if len(trans_words) >= 2:
-        candidates.append(trans_words[0])
-        candidates.append(' '.join(trans_words[:2]))
+    # 후보 3: 핵심 단어 조합
+    for cand in [translated, romanized]:
+        if cand:
+            words = cand.split()
+            core_words = [w for w in words if w.lower() not in stop_words]
+            core_query = ' '.join(core_words)
+            if core_query and core_query != cand and core_query not in candidates:
+                candidates.append(core_query)
+            if len(words) >= 2:
+                w1 = words[0]
+                w2 = ' '.join(words[:2])
+                if w1 not in candidates:
+                    candidates.append(w1)
+                if w2 not in candidates:
+                    candidates.append(w2)
 
     for candidate in candidates:
         result = _try_yfinance_search(candidate, market_opt, cleaned_query)
         if result:
             return result
 
-    print(f"[검색 실패] '{cleaned_query}' (번역: '{translated}')에 해당하는 자산을 찾지 못했습니다.")
+    print(f"[검색 실패] '{cleaned_query}' (번역: '{translated}', 음역: '{romanized}')에 해당하는 자산을 찾지 못했습니다.")
     return None

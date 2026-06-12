@@ -409,6 +409,55 @@ def get_current_profile_settings() -> dict:
         "saved_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     }
 
+# ────────────────────────────────────────────────────────────
+# 🌐 자산 한글명 사전 및 번역 시스템
+# ────────────────────────────────────────────────────────────
+TICKER_KOREAN_NAMES = {
+    "BTC-USD": "비트코인",
+    "ETH-USD": "이더리움",
+    "XRP-USD": "리플",
+    "SOL-USD": "솔라나",
+    "ADA-USD": "에이다",
+    "DOGE-USD": "도지코인",
+    "AAPL": "애플",
+    "TSLA": "테슬라",
+    "NVDA": "엔비디아",
+    "MSFT": "마이크로소프트",
+    "GOOGL": "구글",
+    "AMZN": "아마존",
+    "META": "메타",
+    "005930.KS": "삼성전자",
+    "035720.KS": "카카오",
+    "035420.KS": "네이버",
+}
+
+def get_asset_korean_name(ticker, english_name=""):
+    """티커에 대한 한글 자산명을 반환합니다. 사전에 없으면 구글 번역을 시도합니다."""
+    if not ticker:
+        return english_name
+    ticker_upper = ticker.upper()
+    if ticker_upper in TICKER_KOREAN_NAMES:
+        return TICKER_KOREAN_NAMES[ticker_upper]
+    
+    if not english_name:
+        return ticker
+        
+    try:
+        import urllib.request, urllib.parse, json
+        # 영어에서 한국어로 번역
+        encoded = urllib.parse.quote(english_name)
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q={encoded}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            korean = data[0][0][0].strip()
+            korean = korean.replace("(주)", "").replace("주식회사", "").strip()
+            return korean
+    except Exception:
+        pass
+    
+    return english_name
+
 def apply_profile_settings(settings: dict):
     """프로필 설정 딕셔너리를 세션 상태 및 각 서브시스템에 적용"""
     # 즐겨찾기 적용
@@ -1279,8 +1328,10 @@ with st.sidebar:
     # 즐겨찾기 리스트
     st.write("⭐ 즐겨찾기 빠른 로드")
     for idx, (name, val) in enumerate(st.session_state.favorites):
+        ko_name = get_asset_korean_name(val, name)
+        display_name = f"{val} ({ko_name})" if ko_name and ko_name.upper() != val.upper() else val
         # 자산 변경 클릭 시 세션 상태를 변경하고 리프레시하여 DOM 충돌 방지
-        if st.button(name, key=f"fav_btn_{idx}_{val}", use_container_width=True):
+        if st.button(display_name, key=f"fav_btn_{idx}_{val}", use_container_width=True):
             st.session_state.search_ticker = val
             st.rerun()
             
@@ -2239,9 +2290,11 @@ with main_container:
                             st.toast(f"❌ {results['asset_name']} 즐겨찾기 해제 완료!", icon="⭐")
                             st.rerun()
                         else:
-                            short_name = results['asset_name'].split(" ")[0]
-                            if len(short_name) > 8:
-                                short_name = short_name[:8]
+                            # 야후 파이낸스 영문명을 우선 한글로 변환하여 저장
+                            ko_name = get_asset_korean_name(results['ticker'], results['asset_name'])
+                            short_name = ko_name if ko_name else results['asset_name'].split(" ")[0]
+                            if len(short_name) > 12:
+                                short_name = short_name[:12]
                             st.session_state.favorites.append((short_name, results['ticker']))
                             save_favorites(st.session_state.favorites)
                             get_marquee_prices.clear()
