@@ -2015,7 +2015,30 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
     t_levels = get_fib_levels(t_high, t_low)
     t_signal = get_t_signal(current_price, t_levels, current_rsi)
 
-    # 5. 기술 점수 및 판단
+    # 5. 현재가의 각 피보나치 레벨별 백분율 위치 연산
+    l_pos = (current_price - l_low) / (l_high - l_low) * 100 if (l_high - l_low) > 0 else 0
+    m_pos = (current_price - m_low) / (m_high - m_low) * 100 if (m_high - m_low) > 0 else 0
+    s_pos = (current_price - s_low) / (s_high - s_low) * 100 if (s_high - s_low) > 0 else 0
+    xs_pos = (current_price - xs_low) / (xs_high - xs_low) * 100 if (xs_high - xs_low) > 0 else 0
+    t_pos = (current_price - t_low) / (t_high - t_low) * 100 if (t_high - t_low) > 0 else 0
+
+    def get_nearest_fib_label(pos_pct):
+        ratio = pos_pct / 100.0
+        fib_milestones = {
+            0.0: "0.000 (저점)",
+            0.146: "0.146 (심층 지지선)",
+            0.236: "0.236 (최종 지지선)",
+            0.382: "0.382 (두 번째 지지선)",
+            0.500: "0.500 (절반선)",
+            0.618: "0.618 (첫 주요 지지선)",
+            0.764: "0.764 (1차 조정선)",
+            1.000: "1.000 (고점)"
+        }
+        nearest_ratio = min(fib_milestones.keys(), key=lambda x: abs(x - ratio))
+        nearest_label = fib_milestones[nearest_ratio].split(' ')[0]
+        return f"{pos_pct:.1f}% ({nearest_label} 부근)"
+
+    # 6. 기술 점수 및 판단
     signals = [l_signal, m_signal, s_signal, xs_signal]
     composite_score = calculate_composite_score(signals, current_rsi, current_macd_hist, bb_pct, vol_ratio)
     score_label = score_to_label(composite_score)
@@ -2136,13 +2159,13 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 ---
 
 ## 2. 타임프레임별 피보나치 진입점 비교
-| 스케일 구분 | 분석 범위 설명 | 최근 고점 (High) | 최근 저점 (Low) | 진입 신호 |
-| :--- | :--- | :--- | :--- | :--- |
-| **L Size (All-Time)** | 전체 역사 범위 | {fmt_price(l_high, rate, is_usd)} | {fmt_price(l_low, rate, is_usd)} | **{l_signal}** |
-| **M Size (Nested L)** | L의 인접 피보나치 레벨 사이 | {fmt_price(m_high, rate, is_usd)} | {fmt_price(m_low, rate, is_usd)} | **{m_signal}** |
-| **S Size (Nested M)** | M의 인접 피보나치 레벨 사이 | {fmt_price(s_high, rate, is_usd)} | {fmt_price(s_low, rate, is_usd)} | **{s_signal}** |
-| **XS Size (Nested S)** | S의 인접 피보나치 레벨 사이 | {fmt_price(xs_high, rate, is_usd)} | {fmt_price(xs_low, rate, is_usd)} | **{xs_signal}** |
-| **T Size (Yesterday)** | 어제 하루 범위 | {fmt_price(t_high, rate, is_usd)} | {fmt_price(t_low, rate, is_usd)} | **{t_signal}** |
+| 스케일 구분 | 분석 범위 설명 | 최근 고점 (High) | 최근 저점 (Low) | 현재가 피보나치 위치 | 진입 신호 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **L Size (All-Time)** | 전체 역사 범위 | {fmt_price(l_high, rate, is_usd)} | {fmt_price(l_low, rate, is_usd)} | **{get_nearest_fib_label(l_pos)}** | **{l_signal}** |
+| **M Size (Nested L)** | L의 인접 피보나치 레벨 사이 | {fmt_price(m_high, rate, is_usd)} | {fmt_price(m_low, rate, is_usd)} | **{get_nearest_fib_label(m_pos)}** | **{m_signal}** |
+| **S Size (Nested M)** | M의 인접 피보나치 레벨 사이 | {fmt_price(s_high, rate, is_usd)} | {fmt_price(s_low, rate, is_usd)} | **{get_nearest_fib_label(s_pos)}** | **{s_signal}** |
+| **XS Size (Nested S)** | S의 인접 피보나치 레벨 사이 | {fmt_price(xs_high, rate, is_usd)} | {fmt_price(xs_low, rate, is_usd)} | **{get_nearest_fib_label(xs_pos)}** | **{xs_signal}** |
+| **Y Size (Yesterday)** | 어제 하루 범위 | {fmt_price(t_high, rate, is_usd)} | {fmt_price(t_low, rate, is_usd)} | **{get_nearest_fib_label(t_pos)}** | **{t_signal}** |
 
 ---
 
@@ -2172,9 +2195,9 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 {make_fib_markdown_table(xs_levels, current_price, rate, is_usd)}
 </details>
 
-### ⏳ T Size (Yesterday) 상세 레벨
+### ⏳ Y Size (Yesterday) 상세 레벨
 <details open>
-<summary><b>⏳ T Size 상세 레벨 표 열기/접기</b></summary>
+<summary><b>⏳ Y Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(t_levels, current_price, rate, is_usd)}
 </details>
 
@@ -2230,6 +2253,11 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
         's_high': s_high, 's_low': s_low,
         'xs_high': xs_high, 'xs_low': xs_low,
         't_high': t_high, 't_low': t_low,
+        'l_pos': l_pos,
+        'm_pos': m_pos,
+        's_pos': s_pos,
+        'xs_pos': xs_pos,
+        't_pos': t_pos,
         't_signal': t_signal,
         'report_markdown': full_report_content,
         'damus_data': damus_data
@@ -2381,7 +2409,7 @@ with main_container:
             with st.expander("📈 피보나치 차트 및 지표 시각화 열기/접기", expanded=True):
                 # 가로형 라디오 탭 셀렉션 (모바일 줌 버그 극복을 위한 조건부 remount 렌더링)
                 chart_options = [
-                    "🌐 All-Time (L)", "📅 180일 스윙 (M)", "📆 30일 단기 (S)", "⏰ 7일 초단기 (XS)", "💜 RSI 14", "💛 MACD", "🥔 Damus 알고리즘"
+                    "🌐 All-Time (L)", "📅 180일 스윙 (M)", "📆 30일 단기 (S)", "⏰ 7일 초단기 (XS)", "⏳ Yesterday (Y)", "💜 RSI 14", "💛 MACD", "🥔 Damus 알고리즘"
                 ]
                 active_chart_tab = st.radio(
                     "🎯 차트 및 피보나치 타임프레임 선택",
@@ -2394,7 +2422,7 @@ with main_container:
 - 📅 M (중기 스윙): 최근 180일 또는 L 스케일 사이의 범위를 기준으로 산출된 중기 스윙 투자 분석용 피보나치 레벨입니다.
 - 📆 S (단기 변곡): 최근 30일 또는 M 스케일 사이의 중첩 범위를 기준으로 한 단기 매매용 피보나치 지지 및 저항 레벨입니다.
 - ⏰ XS (초단기 극세): 최근 7~14일 또는 S 스케일 사이의 미세한 변동 범위를 기준으로 추출한 초단기 및 데이트레이딩용 피보나치 레벨입니다.
-- ⏳ T (어제 하루 범위): 어제 단 하루의 고점과 저점을 기준으로 계산한 초단기 당일 변곡 및 지지선입니다."""
+- ⏳ Y (어제 하루 범위): 어제 단 하루의 고점과 저점을 기준으로 계산한 초단기 당일 변곡 및 지지선입니다."""
                 )
                 
                 # 피보나치 분석 모드(시간 주기 vs 가격 레벨) 접이식 활용 가이드 노출
@@ -2420,7 +2448,7 @@ with main_container:
                 show_m = (active_chart_tab == "📅 180일 스윙 (M)")
                 show_s = (active_chart_tab == "📆 30일 단기 (S)")
                 show_xs = (active_chart_tab == "⏰ 7일 초단기 (XS)")
-                show_t = False
+                show_t = (active_chart_tab == "⏳ Yesterday (Y)")
 
                 # 활성화된 탭의 차트만 단독 렌더링하여 탭 전환 시 줌이 강제 초기화(원복)되도록 처리
                 if active_chart_tab == "🌐 All-Time (L)":
@@ -2428,7 +2456,7 @@ with main_container:
                     l_actual_low = float(results['df_all']['Low'].min())
                     fig_l = create_plotly_candlestick_chart(
                         df=results['df_all'].copy(),
-                        title=f"L Size: All-Time / 고점: {fmt_chart_val(l_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(l_actual_low, results['is_usd'])}",
+                        title=f"L Size: All-Time / 고점: {fmt_chart_val(l_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(l_actual_low, results['is_usd'])} / 현재가 위치: {results['l_pos']:.1f}%",
                         is_usd=results['is_usd'],
                         l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
                         show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
@@ -2441,7 +2469,7 @@ with main_container:
                     m_actual_low = float(results['df_m']['Low'].min())
                     fig_m = create_plotly_candlestick_chart(
                         df=results['df_m'],
-                        title=f"M Size (최근 180봉) / 고점: {fmt_chart_val(m_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(m_actual_low, results['is_usd'])}",
+                        title=f"M Size (최근 180봉) / 고점: {fmt_chart_val(m_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(m_actual_low, results['is_usd'])} / 현재가 위치: {results['m_pos']:.1f}%",
                         sma_cols=['SMA_5', 'SMA_20'],
                         bb_cols=['BB_Upper', 'BB_Lower'],
                         is_usd=results['is_usd'],
@@ -2456,7 +2484,7 @@ with main_container:
                     s_actual_low = float(results['df_s']['Low'].min())
                     fig_s = create_plotly_candlestick_chart(
                         df=results['df_s'],
-                        title=f"S Size (최근 30봉) / 고점: {fmt_chart_val(s_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(s_actual_low, results['is_usd'])}",
+                        title=f"S Size (최근 30봉) / 고점: {fmt_chart_val(s_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(s_actual_low, results['is_usd'])} / 현재가 위치: {results['s_pos']:.1f}%",
                         sma_cols=['SMA_5', 'SMA_20'],
                         is_usd=results['is_usd'],
                         l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
@@ -2470,13 +2498,26 @@ with main_container:
                     xs_actual_low = float(results['df_xs']['Low'].min())
                     fig_xs = create_plotly_candlestick_chart(
                         df=results['df_xs'],
-                        title=f"XS Size (최근 14봉) / 고점: {fmt_chart_val(xs_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(xs_actual_low, results['is_usd'])}",
+                        title=f"XS Size (최근 14봉) / 고점: {fmt_chart_val(xs_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(xs_actual_low, results['is_usd'])} / 현재가 위치: {results['xs_pos']:.1f}%",
                         is_usd=results['is_usd'],
                         l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
                         show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
                     )
                     with st.expander("⏰ 7일 초단기 (XS) 피보나치 차트 접기/펼치기", expanded=True):
                         st.plotly_chart(fig_xs, use_container_width=True, key=f"plotly_chart_xs_size_{results['ticker']}", config={'scrollZoom': False})
+                    
+                elif active_chart_tab == "⏳ Yesterday (Y)":
+                    t_actual_high = float(results['t_high'])
+                    t_actual_low = float(results['t_low'])
+                    fig_t = create_plotly_candlestick_chart(
+                        df=results['df_all'].tail(7).copy(),
+                        title=f"Y Size (어제 하루 범위) / 고점: {fmt_chart_val(t_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(t_actual_low, results['is_usd'])} / 현재가 위치: {results['t_pos']:.1f}%",
+                        is_usd=results['is_usd'],
+                        l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
+                        show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
+                    )
+                    with st.expander("⏳ Yesterday (Y) 피보나치 차트 접기/펼치기", expanded=True):
+                        st.plotly_chart(fig_t, use_container_width=True, key=f"plotly_chart_t_size_{results['ticker']}", config={'scrollZoom': False})
                     
                 elif active_chart_tab == "💜 RSI 14":
                     fig_rsi = create_plotly_rsi_chart(results['df_m'])
