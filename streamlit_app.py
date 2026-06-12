@@ -221,7 +221,7 @@ def _render_access_gate():
     <style>
     .gate-card {
         max-width: 520px;
-        margin: 60px auto 0 auto;
+        margin: 40px auto 0 auto;
         background: rgba(20, 20, 30, 0.85);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
@@ -266,6 +266,30 @@ def _render_access_gate():
     </style>
     """, unsafe_allow_html=True)
 
+    # ── localStorage에서 저장된 자격증명 자동 복원 JS ──
+    # 저장된 아이디가 있으면 URL 파라미터로 전달하여 자동 입력 힌트를 줌
+    saved_id_hint = st.query_params.get("_saved_id", "")
+    
+    components.html("""
+    <script>
+    (function() {
+        try {
+            const parent = window.parent;
+            if (!parent || !parent.location) return;
+            const savedId = localStorage.getItem('fibo_saved_user_id') || '';
+            const rememberMe = localStorage.getItem('fibo_remember_me') === '1';
+            if (rememberMe && savedId) {
+                const url = new URL(parent.location.href);
+                if (!url.searchParams.has('_saved_id')) {
+                    url.searchParams.set('_saved_id', savedId);
+                    parent.location.replace(url.toString());
+                }
+            }
+        } catch(e) {}
+    })();
+    </script>
+    """, height=0)
+
     # ── 각 상태에 따른 중앙 카드/폼 렌더링 ──
     if status == "pending":
         st.markdown(f"""
@@ -297,41 +321,125 @@ def _render_access_gate():
         """, unsafe_allow_html=True)
 
     else:
-        # status == "unknown" → 신청 폼
+        # status == "unknown" → 로그인 또는 신청 폼
         st.markdown("""
         <div class="gate-card">
             <div class="gate-icon">🎯</div>
             <div class="gate-title">FiboAnalyzer</div>
             <div class="gate-sub">
                 이 서비스는 <b>허가된 사용자만</b> 이용할 수 있습니다.<br>
-                아래 양식을 작성하여 접속을 신청해 주세요.<br>
-                관리자가 승인하면 이용하실 수 있습니다.
+                아이디와 비밀번호로 로그인하거나 접속을 신청하세요.
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        with st.form("access_request_form", clear_on_submit=False):
-            name = st.text_input("👤 이름 (닉네임)", placeholder="홍길동", max_chars=30)
-            reason = st.text_area("📝 접속 신청 이유", placeholder="예) 주식/코인 공부를 위해 사용하고 싶습니다.", max_chars=200, height=100)
-            submitted = st.form_submit_button("🙋 접속 신청하기", use_container_width=True, type="primary")
+        st.write("")
 
-        if submitted:
-            if not name.strip():
-                st.error("이름을 입력해 주세요.")
-                st.stop()
-            if not reason.strip():
-                st.error("신청 이유를 입력해 주세요.")
-                st.stop()
-            ok = access_manager.add_pending(token, name, reason)
-            if ok:
-                st.success(f"✅ '{name}' 님의 접속 신청이 완료되었습니다! 관리자 승인 후 이용 가능합니다.")
-                st.rerun()
-            else:
-                st.info("이미 신청이 접수되어 있습니다. 관리자 승인을 기다려 주세요.")
+        # ── 탭: 로그인 / 접속신청 ──
+        login_tab, apply_tab = st.tabs(["🔓 로그인", "🙋 접속 신청"])
+
+        # ─ 로그인 탭 ─
+        with login_tab:
+            st.markdown("""
+            <p style='color:#94A3B8; font-size:13px; margin-bottom:10px;'>
+            등록된 아이디와 비밀번호로 로그인하세요.<br>
+            <span style='color:#60A5FA;'>💡 "로그인 기억"을 체크하면 다음 방문 시 자동으로 아이디가 입력됩니다.</span>
+            </p>
+            """, unsafe_allow_html=True)
+
+            with st.form("id_pw_login_form", clear_on_submit=False):
+                login_id = st.text_input(
+                    "👤 아이디",
+                    value=saved_id_hint,
+                    placeholder="아이디 입력",
+                    key="login_id_input"
+                )
+                login_pw = st.text_input(
+                    "🔒 비밀번호",
+                    type="password",
+                    placeholder="비밀번호 입력",
+                    key="login_pw_input"
+                )
+                remember_me = st.checkbox("🗃️ 이 기기에서 아이디 기억하기", value=(saved_id_hint != ""))
+                login_submitted = st.form_submit_button("🚀 로그인", use_container_width=True, type="primary")
+
+            if login_submitted:
+                if not login_id.strip() or not login_pw.strip():
+                    st.error("아이디와 비밀번호를 모두 입력해 주세요.")
+                else:
+                    ok, msg, user_token = access_manager.login_with_id_password(login_id.strip(), login_pw)
+                    if ok:
+                        # ─ 로그인 성공 ─
+                        # 1. 현재 브라우저 토큰을 사용자 계정 토큰으로 교체 or 현재 토큰을 approved에 등록
+                        if user_token:
+                            db_login = access_manager.load_access_db(force_reload=True)
+                            if token not in db_login["approved"]:
+                                db_login["approved"].append(token)
+                                db_login["pending"] = [e for e in db_login["pending"] if e.get("token") != token]
+                                db_login["denied"] = [t for t in db_login["denied"] if t != token]
+                                access_manager.save_access_db(db_login)
+
+                        # 2. "로그인 기억" → localStorage에 아이디 저장
+                        if remember_me:
+                            components.html(f"""
+                            <script>
+                            try {{
+                                window.parent.localStorage.setItem('fibo_saved_user_id', {repr(login_id.strip())});
+                                window.parent.localStorage.setItem('fibo_remember_me', '1');
+                            }} catch(e) {{}}
+                            </script>
+                            """, height=0)
+                        else:
+                            components.html("""
+                            <script>
+                            try {
+                                window.parent.localStorage.removeItem('fibo_saved_user_id');
+                                window.parent.localStorage.setItem('fibo_remember_me', '0');
+                            } catch(e) {}
+                            </script>
+                            """, height=0)
+
+                        st.success(msg)
+                        st.balloons()
+                        import time
+                        time.sleep(0.8)
+                        # URL에서 _saved_id 제거하고 rerun
+                        if "_saved_id" in st.query_params:
+                            del st.query_params["_saved_id"]
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
+
+        # ─ 접속 신청 탭 ─
+        with apply_tab:
+            st.markdown("""
+            <p style='color:#94A3B8; font-size:13px; margin-bottom:10px;'>
+            아래 양식을 작성하여 접속을 신청하세요.<br>
+            관리자가 승인하면 이용하실 수 있습니다.
+            </p>
+            """, unsafe_allow_html=True)
+
+            with st.form("access_request_form", clear_on_submit=False):
+                name = st.text_input("👤 이름 (닉네임)", placeholder="홍길동", max_chars=30)
+                reason = st.text_area("📝 접속 신청 이유", placeholder="예) 주식/코인 공부를 위해 사용하고 싶습니다.", max_chars=200, height=100)
+                submitted = st.form_submit_button("🙋 접속 신청하기", use_container_width=True, type="primary")
+
+            if submitted:
+                if not name.strip():
+                    st.error("이름을 입력해 주세요.")
+                    st.stop()
+                if not reason.strip():
+                    st.error("신청 이유를 입력해 주세요.")
+                    st.stop()
+                ok = access_manager.add_pending(token, name, reason)
+                if ok:
+                    st.success(f"✅ '{name}' 님의 접속 신청이 완료되었습니다! 관리자 승인 후 이용 가능합니다.")
+                    st.rerun()
+                else:
+                    st.info("이미 신청이 접수되어 있습니다. 관리자 승인을 기다려 주세요.")
 
     # ── 공통: 관리자 직접 접속 (비밀번호 입력 시 즉시 승인) ──
-    # pending, denied, unknown 모든 상태에서 하단에 표시되도록 이 곳에 배치합니다.
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     with st.expander("🔑 관리자로 접속", expanded=False):
         st.caption("관리자 비밀번호를 입력하면 이 브라우저에 즉시 접근 권한을 부여합니다.")
         with st.form("admin_direct_login_form"):
@@ -357,6 +465,7 @@ def _render_access_gate():
 
 # 접근 제어 게이트 실행 (통과하지 못하면 st.stop()으로 이후 코드 실행 차단)
 _render_access_gate()
+
 
 
 
@@ -1462,7 +1571,7 @@ with st.sidebar:
                 st.rerun()
 
             # ── 탭 구분 ──
-            tab_pending, tab_approved, tab_devopt = st.tabs(["📋 대기", "✅ 승인됨", "⚙️ 개발자 옵션"])
+            tab_pending, tab_approved, tab_accounts, tab_devopt = st.tabs(["📋 대기", "✅ 승인됨", "👥 계정 관리", "⚙️ 개발자 옵션"])
 
             # ── 탭1: 승인 대기 목록 ──
             with tab_pending:
@@ -1496,14 +1605,80 @@ with st.sidebar:
                 else:
                     st.markdown(f"**총 {len(approved_list)}명이 승인되어 있습니다.**")
                     for i, tok in enumerate(approved_list):
-                        col_tok, col_rev = st.columns([0.75, 0.25])
+                        uid = access_manager.get_user_id_by_token(tok)
+                        col_uid, col_tok, col_rev = st.columns([0.25, 0.5, 0.25])
+                        col_uid.markdown(f"**{uid}**" if uid else "*(토큰 전용)*")
                         col_tok.code(tok[:20] + "…", language=None)
                         if col_rev.button("🚫 박탈", key=f"revoke_{i}_{tok[:6]}"):
                             access_manager.revoke_user(tok)
                             st.warning("접근 권한을 박탈했습니다.")
                             st.rerun()
 
-            # ── 탭3: 개발자 옵션 ──
+            # ── 탭3: 계정 관리 (아이디/비밀번호) ──
+            with tab_accounts:
+                st.markdown("#### 👤 새 계정 만들기")
+                st.caption("아이디와 비밀번호로 로그인할 수 있는 계정을 생성합니다. 이 계정으로 로그인하면 자동으로 접근 승인됩니다.")
+                with st.form("admin_create_account_form", clear_on_submit=True):
+                    new_uid = st.text_input("아이디", placeholder="예) user01 (2~20자)", key="admin_new_uid")
+                    new_upw = st.text_input("비밀번호", type="password", placeholder="4자 이상", key="admin_new_upw")
+                    new_upw2 = st.text_input("비밀번호 확인", type="password", placeholder="동일 비밀번호 재입력", key="admin_new_upw2")
+                    # 계정에 연결할 토큰: 신규 생성
+                    create_btn = st.form_submit_button("✅ 계정 생성", use_container_width=True, type="primary")
+                if create_btn:
+                    if not new_uid.strip():
+                        st.error("아이디를 입력해 주세요.")
+                    elif len(new_upw) < 4:
+                        st.error("비밀번호는 4자 이상이어야 합니다.")
+                    elif new_upw != new_upw2:
+                        st.error("비밀번호가 일치하지 않습니다.")
+                    else:
+                        import secrets as _sec
+                        new_tok = _sec.token_urlsafe(24)
+                        ok_c, msg_c = access_manager.create_user_account(new_uid.strip(), new_upw, new_tok)
+                        if ok_c:
+                            st.success(msg_c)
+                            st.caption(f"🔑 계정 토큰: `{new_tok}`")
+                        else:
+                            st.error(msg_c)
+
+                st.write("---")
+                st.markdown("#### 📋 등록된 계정 목록")
+                users = access_manager.get_user_accounts()
+                if not users:
+                    st.info("등록된 계정이 없습니다. 위에서 새 계정을 만들어 주세요.")
+                else:
+                    for uid_key, uinfo in users.items():
+                        col_u1, col_u2, col_u3 = st.columns([0.4, 0.35, 0.25])
+                        col_u1.markdown(f"**👤 {uid_key}**")
+                        col_u2.caption(f"생성: {uinfo.get('created_at','')}")
+                        if col_u3.button("🗑️ 삭제", key=f"del_user_{uid_key}"):
+                            access_manager.delete_user_account(uid_key)
+                            st.warning(f"'{uid_key}' 계정이 삭제되었습니다.")
+                            st.rerun()
+
+                st.write("---")
+                st.markdown("#### 🔑 사용자 비밀번호 초기화 (관리자)")
+                st.caption("사용자가 비밀번호를 잊었을 때 관리자가 새 비밀번호를 설정합니다.")
+                with st.form("admin_reset_pw_form", clear_on_submit=True):
+                    reset_uid = st.text_input("아이디", placeholder="비밀번호를 초기화할 아이디", key="admin_reset_uid")
+                    reset_new_pw = st.text_input("새 비밀번호", type="password", placeholder="4자 이상", key="admin_reset_new_pw")
+                    reset_btn = st.form_submit_button("🔄 비밀번호 초기화", use_container_width=True)
+                if reset_btn:
+                    if not reset_uid.strip() or not reset_new_pw:
+                        st.error("아이디와 새 비밀번호를 모두 입력해 주세요.")
+                    elif len(reset_new_pw) < 4:
+                        st.error("새 비밀번호는 4자 이상이어야 합니다.")
+                    else:
+                        db_users = access_manager.load_access_db(force_reload=True)
+                        if reset_uid.strip() not in db_users.get("users", {}):
+                            st.error("존재하지 않는 아이디입니다.")
+                        else:
+                            import hashlib as _hl
+                            db_users["users"][reset_uid.strip()]["password_hash"] = _hl.sha256(reset_new_pw.encode("utf-8")).hexdigest()
+                            access_manager.save_access_db(db_users)
+                            st.success(f"✅ '{reset_uid.strip()}' 비밀번호가 초기화되었습니다.")
+
+            # ── 탭4: 개발자 옵션 ──
             with tab_devopt:
                 st.markdown("#### 🔐 관리자 비밀번호 변경")
                 old_pw = st.text_input("현재 비밀번호", type="password", key="devopt_old_pw")

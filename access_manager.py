@@ -252,3 +252,126 @@ def change_admin_password(old_password: str, new_password: str) -> tuple[bool, s
     env["ADMIN_PASSWORD_HASH"] = new_hash
     _write_env(env)
     return True, "✅ 관리자 비밀번호가 성공적으로 변경되었습니다."
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 🔑 아이디 / 비밀번호 계정 시스템
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _hash_password(password: str) -> str:
+    """비밀번호를 SHA-256으로 해시합니다."""
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def get_user_accounts() -> dict:
+    """
+    access_control.json 내 'users' 섹션을 반환합니다.
+    형식: { "아이디": {"password_hash": str, "token": str, "created_at": str}, ... }
+    """
+    db = load_access_db(force_reload=True)
+    return db.get("users", {})
+
+
+def create_user_account(user_id: str, password: str, token: str) -> tuple[bool, str]:
+    """
+    새 사용자 계정을 생성합니다.
+    - user_id  : 아이디 (영문/숫자, 4~20자)
+    - password : 비밀번호 (6자 이상)
+    - token    : 이 계정에 연결할 접근 토큰
+    Returns: (성공 여부, 메시지)
+    """
+    user_id = user_id.strip()
+    if len(user_id) < 2 or len(user_id) > 20:
+        return False, "아이디는 2~20자로 입력해 주세요."
+    if len(password) < 4:
+        return False, "비밀번호는 4자 이상으로 입력해 주세요."
+
+    db = load_access_db(force_reload=True)
+    if "users" not in db:
+        db["users"] = {}
+
+    if user_id in db["users"]:
+        return False, f"'{user_id}' 아이디가 이미 존재합니다."
+
+    db["users"][user_id] = {
+        "password_hash": _hash_password(password),
+        "token": token,
+        "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    }
+    # 토큰이 approved에 없으면 추가
+    if token not in db.get("approved", []):
+        db.setdefault("approved", []).append(token)
+        # pending / denied 에서 제거
+        db["pending"] = [e for e in db.get("pending", []) if e.get("token") != token]
+        db["denied"] = [t for t in db.get("denied", []) if t != token]
+
+    save_access_db(db)
+    return True, f"✅ '{user_id}' 계정이 생성되었습니다."
+
+
+def login_with_id_password(user_id: str, password: str) -> tuple[bool, str, str]:
+    """
+    아이디 + 비밀번호로 로그인을 시도합니다.
+    Returns: (성공 여부, 메시지, 해당 계정의 token)
+    """
+    user_id = user_id.strip()
+    db = load_access_db(force_reload=True)
+    users = db.get("users", {})
+
+    if user_id not in users:
+        return False, "아이디 또는 비밀번호가 올바르지 않습니다.", ""
+
+    stored_hash = users[user_id].get("password_hash", "")
+    if _hash_password(password) != stored_hash:
+        return False, "아이디 또는 비밀번호가 올바르지 않습니다.", ""
+
+    token = users[user_id].get("token", "")
+    # 토큰이 approved에 없으면 자동 추가
+    if token and token not in db.get("approved", []):
+        db.setdefault("approved", []).append(token)
+        db["pending"] = [e for e in db.get("pending", []) if e.get("token") != token]
+        db["denied"] = [t for t in db.get("denied", []) if t != token]
+        save_access_db(db)
+
+    return True, f"✅ '{user_id}' 님, 환영합니다!", token
+
+
+def change_user_password(user_id: str, old_password: str, new_password: str) -> tuple[bool, str]:
+    """사용자 비밀번호를 변경합니다."""
+    user_id = user_id.strip()
+    db = load_access_db(force_reload=True)
+    users = db.get("users", {})
+
+    if user_id not in users:
+        return False, "존재하지 않는 아이디입니다."
+    if _hash_password(old_password) != users[user_id].get("password_hash", ""):
+        return False, "현재 비밀번호가 올바르지 않습니다."
+    if len(new_password) < 4:
+        return False, "새 비밀번호는 4자 이상이어야 합니다."
+
+    users[user_id]["password_hash"] = _hash_password(new_password)
+    db["users"] = users
+    save_access_db(db)
+    return True, "✅ 비밀번호가 변경되었습니다."
+
+
+def delete_user_account(user_id: str) -> bool:
+    """사용자 계정을 삭제합니다 (연결된 토큰은 유지)."""
+    db = load_access_db(force_reload=True)
+    users = db.get("users", {})
+    if user_id not in users:
+        return False
+    del users[user_id]
+    db["users"] = users
+    save_access_db(db)
+    return True
+
+
+def get_user_id_by_token(token: str) -> str:
+    """토큰으로 아이디를 역조회합니다. 없으면 빈 문자열 반환."""
+    db = load_access_db(force_reload=True)
+    for uid, info in db.get("users", {}).items():
+        if info.get("token") == token:
+            return uid
+    return ""
+
