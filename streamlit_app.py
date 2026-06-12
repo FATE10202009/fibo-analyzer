@@ -1434,7 +1434,12 @@ with st.sidebar:
     # ────────────────────────────────────────────────────────────
     if st.session_state.show_admin_panel:
         st.write("---")
-        st.subheader("🛡️ 관리자 패널")
+        col_admin_title, col_admin_close = st.columns([0.65, 0.35])
+        col_admin_title.subheader("🛡️ 관리자 패널")
+        if col_admin_close.button("닫기 ✖", key="close_admin_panel_btn", use_container_width=True):
+            st.session_state.show_admin_panel = False
+            st.session_state.admin_click_count = 0
+            st.rerun()
         # 관리자 인증 세션 초기화
         if "admin_authenticated" not in st.session_state:
             st.session_state.admin_authenticated = False
