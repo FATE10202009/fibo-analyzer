@@ -2247,116 +2247,125 @@ with main_container:
             # ────────────────────────────────────────────────────────────
             st.subheader("📈 멀티 타임프레임 차트 및 피보나치 작도")
             
-            # 가로형 라디오 탭 셀렉션 (모바일 줌 버그 극복을 위한 조건부 remount 렌더링)
-            chart_options = [
-                "🌐 All-Time (L)", "📅 180일 스윙 (M)", "📆 30일 단기 (S)", "⏰ 7일 초단기 (XS)", "💜 RSI 14", "💛 MACD", "🥔 Damus 알고리즘"
-            ]
-            active_chart_tab = st.radio(
-                "🎯 차트 및 피보나치 타임프레임 선택",
-                options=chart_options,
-                horizontal=True,
-                label_visibility="visible",
-                key=f"chart_tab_selector_{results['ticker']}",
-                help="""💡 피보나치 타임프레임별 설명:
+            # 그래프 영역 전체를 접고 펼 수 있도록 st.expander로 감쌉니다.
+            with st.expander("📈 피보나치 차트 및 지표 시각화 열기/접기", expanded=True):
+                # 가로형 라디오 탭 셀렉션 (모바일 줌 버그 극복을 위한 조건부 remount 렌더링)
+                chart_options = [
+                    "🌐 All-Time (L)", "📅 180일 스윙 (M)", "📆 30일 단기 (S)", "⏰ 7일 초단기 (XS)", "💜 RSI 14", "💛 MACD", "🥔 Damus 알고리즘"
+                ]
+                active_chart_tab = st.radio(
+                    "🎯 차트 및 피보나치 타임프레임 선택",
+                    options=chart_options,
+                    horizontal=True,
+                    label_visibility="visible",
+                    key=f"chart_tab_selector_{results['ticker']}",
+                    help="""💡 피보나치 타임프레임별 설명:
 - 🌐 L (장기 대파동): 전체 역사적 최고점/최저점 기준으로 분석한 대파동 피보나치 레벨입니다. 역사적인 장기 지지 및 저항 구간을 판별하는 데 사용됩니다.
 - 📅 M (중기 스윙): 최근 180일 또는 L 스케일 사이의 범위를 기준으로 산출된 중기 스윙 투자 분석용 피보나치 레벨입니다.
 - 📆 S (단기 변곡): 최근 30일 또는 M 스케일 사이의 중첩 범위를 기준으로 한 단기 매매용 피보나치 지지 및 저항 레벨입니다.
 - ⏰ XS (초단기 극세): 최근 7~14일 또는 S 스케일 사이의 미세한 변동 범위를 기준으로 추출한 초단기 및 데이트레이딩용 피보나치 레벨입니다.
 - ⏳ T (어제 하루 범위): 어제 단 하루의 고점과 저점을 기준으로 계산한 초단기 당일 변곡 및 지지선입니다."""
-            )
-            
-            # 피보나치 분석 모드(시간 주기 vs 가격 레벨) 접이식 활용 가이드 노출
-            with st.expander("💡 피보나치 분석 모드(시간 주기 vs 가격 레벨) 활용 가이드", expanded=False):
-                st.markdown("""
-                ### 🎯 어떤 분석 모드를 신뢰하고 사용해야 하나요?
-                사이드바의 **분석 조건 설정**에서 피보나치 중첩 모드를 변경해가며 아래 가이드를 활용해 보세요.
+                )
                 
-                1. 🌐 **시간 주기 기반 중첩 (Time-based)**
-                   - **추천 상황**: 상승세가 강력하거나 큰 폭의 하락 조정을 겪는 **추세적 장세**
-                   - **작동 원리**: 정해진 시간 주기(180일, 30일 등) 내의 실제 최고점/최저점을 기준으로 분석합니다. 전 세계 트레이더와 대형 알고리즘들이 가장 널리 관측하는 대중적 지지선이므로 신뢰도가 높습니다.
-                   
-                2. 📐 **가격 레벨 기반 수학적 중첩 (Price-based / Fractal)**
-                   - **추천 상황**: 좁은 가격 구간에 갇혀 위아래로 출렁이는 지루한 **횡보 및 박스권 장세**
-                   - **작동 원리**: 장기 피보나치 라인 사이의 내부 횡보 가격 범위를 정밀한 프랙탈 수학적 공식으로 쪼개어 중첩 분석합니다. 눈으로 잘 확인되지 않는 미세한 숨겨진 매물대 지지선을 찾아냅니다.
-                
-                🔥 **극강의 신뢰 타점 찾는 꿀팁**: 
-                두 모드를 번갈아 설정해 보았을 때, **양쪽 모드 모두에서 일치하거나 매우 겹쳐서 나타나는 가격대**가 있다면 그 지점이 기술적 분석상 가장 확실하고 확률이 높은 **최적의 분할매수(DCA) 진입 타점**이 됩니다.
-                """)
+                # 피보나치 분석 모드(시간 주기 vs 가격 레벨) 접이식 활용 가이드 노출
+                with st.expander("💡 피보나치 분석 모드(시간 주기 vs 가격 레벨) 활용 가이드", expanded=False):
+                    st.markdown("""
+                    ### 🎯 어떤 분석 모드를 신뢰하고 사용해야 하나요?
+                    사이드바의 **분석 조건 설정**에서 피보나치 중첩 모드를 변경해가며 아래 가이드를 활용해 보세요.
+                    
+                    1. 🌐 **시간 주기 기반 중첩 (Time-based)**
+                       - **추천 상황**: 상승세가 강력하거나 큰 폭의 하락 조정을 겪는 **추세적 장세**
+                       - **작동 원리**: 정해진 시간 주기(180일, 30일 등) 내의 실제 최고점/최저점을 기준으로 분석합니다. 전 세계 트레이더와 대형 알고리즘들이 가장 널리 관측하는 대중적 지지선이므로 신뢰도가 높습니다.
+                       
+                    2. 📐 **가격 레벨 기반 수학적 중첩 (Price-based / Fractal)**
+                       - **추천 상황**: 좁은 가격 구간에 갇혀 위아래로 출렁이는 지루한 **횡보 및 박스권 장세**
+                       - **작동 원리**: 장기 피보나치 라인 사이의 내부 횡보 가격 범위를 정밀한 프랙탈 수학적 공식으로 쪼개어 중첩 분석합니다. 눈으로 잘 확인되지 않는 미세한 숨겨진 매물대 지지선을 찾아냅니다.
+                    
+                    🔥 **극강의 신뢰 타점 찾는 꿀팁**: 
+                    두 모드를 번갈아 설정해 보았을 때, **양쪽 모드 모두에서 일치하거나 매우 겹쳐서 나타나는 가격대**가 있다면 그 지점이 기술적 분석상 가장 확실하고 확률이 높은 **최적의 분할매수(DCA) 진입 타점**이 됩니다.
+                    """)
 
-            # 피보나치 레벨 표시 설정 (라디오 탭 선택에 따라 자동 지정)
-            show_l = (active_chart_tab == "🌐 All-Time (L)")
-            show_m = (active_chart_tab == "📅 180일 스윙 (M)")
-            show_s = (active_chart_tab == "📆 30일 단기 (S)")
-            show_xs = (active_chart_tab == "⏰ 7일 초단기 (XS)")
-            show_t = False
+                # 피보나치 레벨 표시 설정 (라디오 탭 선택에 따라 자동 지정)
+                show_l = (active_chart_tab == "🌐 All-Time (L)")
+                show_m = (active_chart_tab == "📅 180일 스윙 (M)")
+                show_s = (active_chart_tab == "📆 30일 단기 (S)")
+                show_xs = (active_chart_tab == "⏰ 7일 초단기 (XS)")
+                show_t = False
 
-            # 활성화된 탭의 차트만 단독 렌더링하여 탭 전환 시 줌이 강제 초기화(원복)되도록 처리
-            if active_chart_tab == "🌐 All-Time (L)":
-                l_actual_high = float(results['df_all']['High'].max())
-                l_actual_low = float(results['df_all']['Low'].min())
-                fig_l = create_plotly_candlestick_chart(
-                    df=results['df_all'].copy(),
-                    title=f"L Size: All-Time / 고점: {fmt_chart_val(l_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(l_actual_low, results['is_usd'])}",
-                    is_usd=results['is_usd'],
-                    l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
-                    show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
-                )
-                st.plotly_chart(fig_l, use_container_width=True, key=f"plotly_chart_l_size_{results['ticker']}", config={'scrollZoom': False})
-                
-            elif active_chart_tab == "📅 180일 스윙 (M)":
-                m_actual_high = float(results['df_m']['High'].max())
-                m_actual_low = float(results['df_m']['Low'].min())
-                fig_m = create_plotly_candlestick_chart(
-                    df=results['df_m'],
-                    title=f"M Size (최근 180봉) / 고점: {fmt_chart_val(m_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(m_actual_low, results['is_usd'])}",
-                    sma_cols=['SMA_5', 'SMA_20'],
-                    bb_cols=['BB_Upper', 'BB_Lower'],
-                    is_usd=results['is_usd'],
-                    l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
-                    show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
-                )
-                st.plotly_chart(fig_m, use_container_width=True, key=f"plotly_chart_m_size_{results['ticker']}", config={'scrollZoom': False})
-                
-            elif active_chart_tab == "📆 30일 단기 (S)":
-                s_actual_high = float(results['df_s']['High'].max())
-                s_actual_low = float(results['df_s']['Low'].min())
-                fig_s = create_plotly_candlestick_chart(
-                    df=results['df_s'],
-                    title=f"S Size (최근 30봉) / 고점: {fmt_chart_val(s_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(s_actual_low, results['is_usd'])}",
-                    sma_cols=['SMA_5', 'SMA_20'],
-                    is_usd=results['is_usd'],
-                    l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
-                    show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
-                )
-                st.plotly_chart(fig_s, use_container_width=True, key=f"plotly_chart_s_size_{results['ticker']}", config={'scrollZoom': False})
-                
-            elif active_chart_tab == "⏰ 7일 초단기 (XS)":
-                xs_actual_high = float(results['df_xs']['High'].max())
-                xs_actual_low = float(results['df_xs']['Low'].min())
-                fig_xs = create_plotly_candlestick_chart(
-                    df=results['df_xs'],
-                    title=f"XS Size (최근 14봉) / 고점: {fmt_chart_val(xs_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(xs_actual_low, results['is_usd'])}",
-                    is_usd=results['is_usd'],
-                    l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
-                    show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
-                )
-                st.plotly_chart(fig_xs, use_container_width=True, key=f"plotly_chart_xs_size_{results['ticker']}", config={'scrollZoom': False})
-                
-            elif active_chart_tab == "💜 RSI 14":
-                fig_rsi = create_plotly_rsi_chart(results['df_m'])
-                st.plotly_chart(fig_rsi, use_container_width=True, key=f"plotly_chart_rsi_14_{results['ticker']}")
-                
-            elif active_chart_tab == "💛 MACD":
-                fig_macd = create_plotly_macd_chart(results['df_m'])
-                st.plotly_chart(fig_macd, use_container_width=True, key=f"plotly_chart_macd_{results['ticker']}")
-                
-            elif active_chart_tab == "🥔 Damus 알고리즘":
-                if results['damus_data']:
-                    from damus import generate_damus_chart
-                    fig_damus = generate_damus_chart(results['damus_data'])
-                    st.plotly_chart(fig_damus, use_container_width=True, key=f"plotly_chart_damus_alg_{results['ticker']}")
-                else:
-                    st.info("Damus 데이터를 생성할 수 없습니다.")
+                # 활성화된 탭의 차트만 단독 렌더링하여 탭 전환 시 줌이 강제 초기화(원복)되도록 처리
+                if active_chart_tab == "🌐 All-Time (L)":
+                    l_actual_high = float(results['df_all']['High'].max())
+                    l_actual_low = float(results['df_all']['Low'].min())
+                    fig_l = create_plotly_candlestick_chart(
+                        df=results['df_all'].copy(),
+                        title=f"L Size: All-Time / 고점: {fmt_chart_val(l_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(l_actual_low, results['is_usd'])}",
+                        is_usd=results['is_usd'],
+                        l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
+                        show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
+                    )
+                    with st.expander("🌐 All-Time (L) 피보나치 차트 접기/펼치기", expanded=True):
+                        st.plotly_chart(fig_l, use_container_width=True, key=f"plotly_chart_l_size_{results['ticker']}", config={'scrollZoom': False})
+                    
+                elif active_chart_tab == "📅 180일 스윙 (M)":
+                    m_actual_high = float(results['df_m']['High'].max())
+                    m_actual_low = float(results['df_m']['Low'].min())
+                    fig_m = create_plotly_candlestick_chart(
+                        df=results['df_m'],
+                        title=f"M Size (최근 180봉) / 고점: {fmt_chart_val(m_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(m_actual_low, results['is_usd'])}",
+                        sma_cols=['SMA_5', 'SMA_20'],
+                        bb_cols=['BB_Upper', 'BB_Lower'],
+                        is_usd=results['is_usd'],
+                        l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
+                        show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
+                    )
+                    with st.expander("📅 180일 스윙 (M) 피보나치 차트 접기/펼치기", expanded=True):
+                        st.plotly_chart(fig_m, use_container_width=True, key=f"plotly_chart_m_size_{results['ticker']}", config={'scrollZoom': False})
+                    
+                elif active_chart_tab == "📆 30일 단기 (S)":
+                    s_actual_high = float(results['df_s']['High'].max())
+                    s_actual_low = float(results['df_s']['Low'].min())
+                    fig_s = create_plotly_candlestick_chart(
+                        df=results['df_s'],
+                        title=f"S Size (최근 30봉) / 고점: {fmt_chart_val(s_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(s_actual_low, results['is_usd'])}",
+                        sma_cols=['SMA_5', 'SMA_20'],
+                        is_usd=results['is_usd'],
+                        l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
+                        show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
+                    )
+                    with st.expander("📆 30일 단기 (S) 피보나치 차트 접기/펼치기", expanded=True):
+                        st.plotly_chart(fig_s, use_container_width=True, key=f"plotly_chart_s_size_{results['ticker']}", config={'scrollZoom': False})
+                    
+                elif active_chart_tab == "⏰ 7일 초단기 (XS)":
+                    xs_actual_high = float(results['df_xs']['High'].max())
+                    xs_actual_low = float(results['df_xs']['Low'].min())
+                    fig_xs = create_plotly_candlestick_chart(
+                        df=results['df_xs'],
+                        title=f"XS Size (최근 14봉) / 고점: {fmt_chart_val(xs_actual_high, results['is_usd'])} / 저점: {fmt_chart_val(xs_actual_low, results['is_usd'])}",
+                        is_usd=results['is_usd'],
+                        l_levels=results['l_levels'], m_levels=results['m_levels'], s_levels=results['s_levels'], xs_levels=results['xs_levels'], t_levels=results['t_levels'],
+                        show_l=show_l, show_m=show_m, show_s=show_s, show_xs=show_xs, show_t=show_t
+                    )
+                    with st.expander("⏰ 7일 초단기 (XS) 피보나치 차트 접기/펼치기", expanded=True):
+                        st.plotly_chart(fig_xs, use_container_width=True, key=f"plotly_chart_xs_size_{results['ticker']}", config={'scrollZoom': False})
+                    
+                elif active_chart_tab == "💜 RSI 14":
+                    fig_rsi = create_plotly_rsi_chart(results['df_m'])
+                    with st.expander("💜 RSI 14 지표 접기/펼치기", expanded=True):
+                        st.plotly_chart(fig_rsi, use_container_width=True, key=f"plotly_chart_rsi_14_{results['ticker']}")
+                    
+                elif active_chart_tab == "💛 MACD":
+                    fig_macd = create_plotly_macd_chart(results['df_m'])
+                    with st.expander("💛 MACD 지표 접기/펼치기", expanded=True):
+                        st.plotly_chart(fig_macd, use_container_width=True, key=f"plotly_chart_macd_{results['ticker']}")
+                    
+                elif active_chart_tab == "🥔 Damus 알고리즘":
+                    if results['damus_data']:
+                        from damus import generate_damus_chart
+                        fig_damus = generate_damus_chart(results['damus_data'])
+                        with st.expander("🥔 Damus 알고리즘 차트 접기/펼치기", expanded=True):
+                            st.plotly_chart(fig_damus, use_container_width=True, key=f"plotly_chart_damus_alg_{results['ticker']}")
+                    else:
+                        st.info("Damus 데이터를 생성할 수 없습니다.")
             st.write("---")
             st.subheader("📑 피보나치 중첩 분석 종합 보고서")
             st.markdown(results['report_markdown'], unsafe_allow_html=True)
