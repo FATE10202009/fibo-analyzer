@@ -3850,23 +3850,11 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 
     # 4. 피보나치 중첩 분석 (L, M, S, XS)
 
-    # ✅ L Size: 역사적 최고점(1.0) → 최고점 이후 최저점(0.0) 순서로 피보나치 계산
-
-    l_high_idx = df_all['High'].idxmax()
+    # ✅ L Size: 역사적 최고점(1.0) 및 최저점(0.0) 기준으로 피보나치 계산 (전체 역사 범위 적용)
 
     l_high = float(df_all['High'].max())
 
-    df_l_after_high = df_all.loc[l_high_idx:]
-
-    if len(df_l_after_high) > 1:
-
-        l_low = float(df_l_after_high['Low'].min())
-
-    else:
-
-        # 최고점이 가장 최근인 경우(역사적 신고가 갱신 중) → 전체 저점 사용
-
-        l_low = float(df_all['Low'].min())
+    l_low = float(df_all['Low'].min())
 
     l_levels = get_fib_levels(l_high, l_low)
 
@@ -3904,65 +3892,33 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 
         # 시간 주기 기반 중첩 (Time-based Multi-Timeframe)
 
-        # ✅ 올바른 피보나치: 최고점(1.0) → 이후 조정 저점(0.0) 순서로 계산
+        # ✅ 각 분석 범위 내의 실제 최고점(1.0)과 최저점(0.0) 기준으로 피보나치 계산
 
-        # M Size (최근 180봉): 최고점 찾기 → 그 이후 최저점(조정 저점) 찾기
-
-        m_high_idx = df_m['High'].idxmax()
+        # M Size (최근 180봉)
 
         m_high = float(df_m['High'].max())
 
-        df_m_after_high = df_m.loc[m_high_idx:]
-
-        if len(df_m_after_high) > 1:
-
-            m_low = float(df_m_after_high['Low'].min())
-
-        else:
-
-            # 최고점이 가장 최근에 있을 경우: 최고점 이전의 저점을 찾음
-
-            m_low = float(df_m['Low'].min())
+        m_low = float(df_m['Low'].min())
 
         m_levels = get_fib_levels(m_high, m_low)
 
         m_signal = get_entry_signal(current_price, m_levels, current_rsi)
 
-        # S Size (최근 30봉): 최고점 → 이후 조정 저점
-
-        s_high_idx = df_s['High'].idxmax()
+        # S Size (최근 30봉)
 
         s_high = float(df_s['High'].max())
 
-        df_s_after_high = df_s.loc[s_high_idx:]
-
-        if len(df_s_after_high) > 1:
-
-            s_low = float(df_s_after_high['Low'].min())
-
-        else:
-
-            s_low = float(df_s['Low'].min())
+        s_low = float(df_s['Low'].min())
 
         s_levels = get_fib_levels(s_high, s_low)
 
         s_signal = get_entry_signal(current_price, s_levels, current_rsi)
 
-        # XS Size (최근 7봉): 최고점 → 이후 조정 저점
-
-        xs_high_idx = df_xs['High'].idxmax()
+        # XS Size (최근 7봉)
 
         xs_high = float(df_xs['High'].max())
 
-        df_xs_after_high = df_xs.loc[xs_high_idx:]
-
-        if len(df_xs_after_high) > 1:
-
-            xs_low = float(df_xs_after_high['Low'].min())
-
-        else:
-
-            xs_low = float(df_xs['Low'].min())
+        xs_low = float(df_xs['Low'].min())
 
         xs_levels = get_fib_levels(xs_high, xs_low)
 

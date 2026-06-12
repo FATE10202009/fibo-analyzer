@@ -238,23 +238,37 @@ def run_analysis_async(search_query, market_opt="all", interval="1d", session_id
             xs_levels = get_fib_levels(xs_high, xs_low)
             xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
         else:
+
             # 기존 시간 주기 기반 중첩 (Time-based Multi-Timeframe)
-            m_low_idx = df_m['Low'].idxmin()
+
+            # M Size (최근 180봉)
+
+            m_high = float(df_m['High'].max())
+
             m_low = float(df_m['Low'].min())
-            m_high = float(df_m.loc[m_low_idx:]['High'].max())
+
             m_levels = get_fib_levels(m_high, m_low)
+
             m_signal = get_entry_signal(current_price, m_levels, current_rsi)
 
-            s_low_idx = df_s['Low'].idxmin()
+            # S Size (최근 30봉)
+
+            s_high = float(df_s['High'].max())
+
             s_low = float(df_s['Low'].min())
-            s_high = float(df_s.loc[s_low_idx:]['High'].max())
+
             s_levels = get_fib_levels(s_high, s_low)
+
             s_signal = get_entry_signal(current_price, s_levels, current_rsi)
 
-            xs_low_idx = df_xs['Low'].idxmin()
+            # XS Size (최근 7봉)
+
+            xs_high = float(df_xs['High'].max())
+
             xs_low = float(df_xs['Low'].min())
-            xs_high = float(df_xs.loc[xs_low_idx:]['High'].max())
+
             xs_levels = get_fib_levels(xs_high, xs_low)
+
             xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
 
         # T Size (Yesterday's Range)

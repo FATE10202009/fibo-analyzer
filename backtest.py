@@ -94,25 +94,22 @@ def run_backtest(df, ticker, limit_years=5, nest_mode="time"):
         else:
             # M Size (당일 시점 기준 최근 180일 프랙탈 변곡점)
             df_sub_m = df_sub.tail(180)
-            m_low_idx = df_sub_m['Low'].idxmin()
+            m_high = float(df_sub_m['High'].max())
             m_low = float(df_sub_m['Low'].min())
-            m_high = float(df_sub_m.loc[m_low_idx:]['High'].max())
             m_levels = get_fib_levels(m_high, m_low)
             m_signal = get_entry_signal(current_price, m_levels, current_rsi)
 
             # S Size (당일 시점 기준 최근 30일 프랙탈 변곡점)
             df_sub_s = df_sub.tail(30)
-            s_low_idx = df_sub_s['Low'].idxmin()
+            s_high = float(df_sub_s['High'].max())
             s_low = float(df_sub_s['Low'].min())
-            s_high = float(df_sub_s.loc[s_low_idx:]['High'].max())
             s_levels = get_fib_levels(s_high, s_low)
             s_signal = get_entry_signal(current_price, s_levels, current_rsi)
 
             # XS Size (당일 시점 기준 최근 7일 프랙탈 변곡점)
             df_sub_xs = df_sub.tail(7)
-            xs_low_idx = df_sub_xs['Low'].idxmin()
+            xs_high = float(df_sub_xs['High'].max())
             xs_low = float(df_sub_xs['Low'].min())
-            xs_high = float(df_sub_xs.loc[xs_low_idx:]['High'].max())
             xs_levels = get_fib_levels(xs_high, xs_low)
             xs_signal = get_entry_signal(current_price, xs_levels, current_rsi)
 
