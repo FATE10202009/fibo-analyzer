@@ -2949,47 +2949,24 @@ with st.sidebar:
                 st.caption("아이디와 비밀번호로 로그인할 수 있는 계정을 생성합니다. 이 계정으로 로그인하면 자동으로 접근 승인됩니다.")
 
                 with st.form("admin_create_account_form", clear_on_submit=True):
-
                     new_uid = st.text_input("아이디", placeholder="예) user01 (2~20자)", key="admin_new_uid")
-
-                    new_upw = st.text_input("비밀번호", type="password", placeholder="4자 이상", key="admin_new_upw")
-
-                    new_upw2 = st.text_input("비밀번호 확인", type="password", placeholder="동일 비밀번호 재입력", key="admin_new_upw2")
-
-                    # 계정에 연결할 토큰: 신규 생성
-
+                    new_name = st.text_input("이름 (닉네임)", placeholder="홍길동", key="admin_new_name")
                     create_btn = st.form_submit_button("✅ 계정 생성", use_container_width=True, type="primary")
 
                 if create_btn:
-
                     if not new_uid.strip():
-
                         st.error("아이디를 입력해 주세요.")
-
-                    elif len(new_upw) < 4:
-
-                        st.error("비밀번호는 4자 이상이어야 합니다.")
-
-                    elif new_upw != new_upw2:
-
-                        st.error("비밀번호가 일치하지 않습니다.")
-
+                    elif len(new_uid.strip()) < 2:
+                        st.error("아이디는 2자 이상이어야 합니다.")
                     else:
-
                         import secrets as _sec
-
                         new_tok = _sec.token_urlsafe(24)
-
-                        ok_c, msg_c = access_manager.create_user_account(new_uid.strip(), new_upw, new_tok)
-
+                        # 비밀번호는 빈 값("")으로 계정 선 생성 (최초 로그인 시 등록)
+                        ok_c, msg_c = access_manager.create_user_account(new_uid.strip(), "", new_tok, name=new_name.strip())
                         if ok_c:
-
                             st.success(msg_c)
-
                             st.caption(f"🔑 계정 토큰: `{new_tok}`")
-
                         else:
-
                             st.error(msg_c)
 
                 st.write("---")

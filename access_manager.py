@@ -257,69 +257,39 @@ def add_pending(token: str, name: str, reason: str,
 # ──────────────────────────────────────────────────────────────────────────────
 
 def approve_user(token: str) -> bool:
-
     """
-
     pending 목록의 토큰을 approved 로 이동하고,
-
-    pending 항목에 user_id/password_hash가 있으면 계정도 자동 생성합니다.
-
+    pending 항목에 user_id가 있으면 계정도 자동 생성합니다.
     """
-
     db = load_access_db(force_reload=True)
-
     new_pending = []
-
     approved_entry = None
-
     for entry in db.get("pending", []):
-
         if isinstance(entry, dict) and entry.get("token") == token:
-
             approved_entry = entry
-
         else:
-
             new_pending.append(entry)
-
     if approved_entry is None:
-
         return False
-
     db["pending"] = new_pending
-
     if token not in db["approved"]:
-
         db["approved"].append(token)
 
-    # 아이디/비밀번호가 신청 데이터에 있으면 계정 자동 생성
-
+    # 아이디가 신청 데이터에 있으면 계정 자동 생성 (비밀번호 해시가 비어있어도 허용)
     uid = approved_entry.get("user_id", "").strip()
-
     pw_hash = approved_entry.get("password_hash", "")
-
-    if uid and pw_hash:
-
+    if uid:
         if "users" not in db:
-
             db["users"] = {}
-
         if uid not in db["users"]:
-
             db["users"][uid] = {
-
                 "password_hash": pw_hash,
-
                 "token": token,
-
                 "name": approved_entry.get("name", ""),
-
                 "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-
             }
 
     save_access_db(db)
-
     return True
 
 def deny_user(token: str) -> bool:
@@ -520,136 +490,99 @@ def get_user_accounts() -> dict:
 
     return db.get("users", {})
 
-def create_user_account(user_id: str, password: str, token: str) -> tuple[bool, str]:
-
+def create_user_account(user_id: str, password: str, token: str, name: str = "") -> tuple[bool, str]:
     """
-
     새 사용자 계정을 생성합니다.
-
-    - user_id  : 아이디 (영문/숫자, 4~20자)
-
-    - password : 비밀번호 (6자 이상)
-
+    - user_id  : 아이디 (영문/숫자, 2~20자)
+    - password : 비밀번호 (선택사항, 없을 시 "" 전달하여 최초 로그인 때 설정)
     - token    : 이 계정에 연결할 접근 토큰
-
+    - name     : 이름 (닉네임)
     Returns: (성공 여부, 메시지)
-
     """
-
     user_id = user_id.strip()
-
     if len(user_id) < 2 or len(user_id) > 20:
-
         return False, "아이디는 2~20자로 입력해 주세요."
-
-    if len(password) < 4:
-
+    if password and len(password) < 4:
         return False, "비밀번호는 4자 이상으로 입력해 주세요."
 
     db = load_access_db(force_reload=True)
-
     if "users" not in db:
-
         db["users"] = {}
 
     if user_id in db["users"]:
-
         return False, f"'{user_id}' 아이디가 이미 존재합니다."
 
     db["users"][user_id] = {
-
-        "password_hash": _hash_password(password),
-
+        "password_hash": _hash_password(password) if password else "",
         "token": token,
-
+        "name": name,
         "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-
     }
-
     # 토큰이 approved에 없으면 추가
-
     if token not in db.get("approved", []):
-
         db.setdefault("approved", []).append(token)
-
-        # pending / denied 에서 제거
-
         db["pending"] = [e for e in db.get("pending", []) if e.get("token") != token]
-
         db["denied"] = [t for t in db.get("denied", []) if t != token]
 
     save_access_db(db)
-
     return True, f"✅ '{user_id}' 계정이 생성되었습니다."
 
 def login_with_id_password(user_id: str, password: str, current_token: str = "") -> tuple[bool, str, str]:
-
     """
-
     아이디 + 비밀번호로 로그인을 시도합니다.
-
     current_token이 제공되면 계정의 토큰을 현재 브라우저의 토큰으로 동기화합니다.
-
     Returns: (성공 여부, 메시지, 해당 계정의 token)
-
     """
-
     user_id = user_id.strip()
-
     db = load_access_db(force_reload=True)
-
     users = db.get("users", {})
 
     # 1. 이미 승인되어 등록된 계정인 경우
-
     if user_id in users:
-
         stored_hash = users[user_id].get("password_hash", "")
-
-        if _hash_password(password) != stored_hash:
-
-            return False, "아이디 또는 비밀번호가 올바르지 않습니다.", ""
+        
+        # 최초 로그인으로 비밀번호가 미설정된 상태인 경우
+        if not stored_hash:
+            if not password or len(password) < 4:
+                return False, "🔑 최초 접속입니다. 사용할 비밀번호를 4자 이상 입력해 주세요.", ""
+            
+            # 사용자가 최초 입력한 비밀번호 등록
+            users[user_id]["password_hash"] = _hash_password(password)
+            stored_hash = users[user_id]["password_hash"]
+            is_first_activation = True
+        else:
+            is_first_activation = False
+            if _hash_password(password) != stored_hash:
+                return False, "아이디 또는 비밀번호가 올바르지 않습니다.", ""
 
         # 현재 로그인한 브라우저의 토큰이 있으면 계정의 토큰을 업데이트
-
         if current_token:
-
             users[user_id]["token"] = current_token
 
         token = current_token if current_token else users[user_id].get("token", "")
 
         # 토큰이 approved에 없으면 자동 추가
-
         if token and token not in db.get("approved", []):
-
             db.setdefault("approved", []).append(token)
-
             db["pending"] = [e for e in db.get("pending", []) if e.get("token") != token]
-
             db["denied"] = [t for t in db.get("denied", []) if t != token]
 
         save_access_db(db)
-
+        
+        if is_first_activation:
+            return True, f"🔑 최초 접속 완료! 비밀번호가 성공적으로 설정되었습니다. 환영합니다!", token
         return True, f"✅ '{user_id}' 님, 환영합니다!", token
 
     # 2. pending 목록에 가입 요청이 존재하는 경우 (아직 승인 대기 중)
-
     pending_list = db.get("pending", [])
-
     is_pending = any(
-
         isinstance(e, dict) and e.get("user_id") == user_id
-
         for e in pending_list
-
     )
-
     if is_pending:
-
         return False, "⏳ 아직 승인 대기 중인 아이디입니다. 관리자의 승인을 기다려 주세요.", ""
 
     # 3. 그 외 아예 존재하지 않는 아이디
-
     return False, "❌ 존재하지 않는 아이디이거나 승인되지 않았습니다. 신규 신청을 해 주세요.", ""
 
 def change_user_password(user_id: str, old_password: str, new_password: str) -> tuple[bool, str]:
