@@ -432,7 +432,7 @@ def verify_admin_password(password: str) -> bool:
 
     """입력된 비밀번호가 관리자 비밀번호와 일치하는지 확인합니다."""
 
-    input_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    input_hash = hashlib.sha256(password.strip().encode("utf-8")).hexdigest()
 
     return input_hash == get_admin_hash()
 

@@ -238,6 +238,14 @@ def _render_access_gate():
 
     import time as _time
 
+    if "gate_admin_click_count" not in st.session_state:
+
+        st.session_state.gate_admin_click_count = 0
+
+    if "show_gate_admin" not in st.session_state:
+
+        st.session_state.show_gate_admin = False
+
     # 현재 URL 토큰 (브라우저별 고유 식별자)
 
     token = st.query_params.get("atoken", "")
@@ -316,7 +324,25 @@ def _render_access_gate():
 
     # ── 공통 스타일 ──
 
-    st.markdown("""<style> @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Noto+Sans+KR:wght@400;700&display=swap'); .gate-wrap { max-width: 480px; margin: 30px auto 0 auto; } .gate-hero { text-align: center; padding: 32px 24px 20px 24px; background: rgba(15,15,20,0.9); border: 1px solid rgba(96,165,250,0.2); border-radius: 20px 20px 0 0; box-shadow: 0 8px 40px rgba(0,0,0,0.5); } .gate-icon { font-size: 52px; margin-bottom: 8px; } .gate-title { font-size: 24px; font-weight: 800; background: linear-gradient(135deg, #60A5FA, #818CF8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; } .gate-sub { color: #94A3B8; font-size: 13px; line-height: 1.7; } .gate-badge-pending { display:inline-block; background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); color:#FBBF24; border-radius:999px; padding:4px 18px; font-size:13px; font-weight:600; } .gate-badge-denied { display:inline-block; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#EF4444; border-radius:999px; padding:4px 18px; font-size:13px; font-weight:600; } </style> <div class="gate-wrap"> <div class="gate-hero"> <div class="gate-icon">🎯</div> <div class="gate-title">FiboAnalyzer</div> <div class="gate-sub">피보나치 AI 멀티타임프레임 분석 플랫폼<br>허가된 사용자만 이용할 수 있습니다.</div> </div> </div>""", unsafe_allow_html=True)
+    st.markdown("""<style> @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Noto+Sans+KR:wght@400;700&display=swap'); .gate-wrap { max-width: 480px; margin: 30px auto 0 auto; } .gate-hero { text-align: center; padding: 32px 24px 20px 24px; background: rgba(15,15,20,0.9); border: 1px solid rgba(96,165,250,0.2); border-radius: 20px 20px 0 0; box-shadow: 0 8px 40px rgba(0,0,0,0.5); } .gate-title { font-size: 24px; font-weight: 800; background: linear-gradient(135deg, #60A5FA, #818CF8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; } .gate-sub { color: #94A3B8; font-size: 13px; line-height: 1.7; } .gate-badge-pending { display:inline-block; background:rgba(251,191,36,0.15); border:1px solid rgba(251,191,36,0.4); color:#FBBF24; border-radius:999px; padding:4px 18px; font-size:13px; font-weight:600; } .gate-badge-denied { display:inline-block; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#EF4444; border-radius:999px; padding:4px 18px; font-size:13px; font-weight:600; } div[element-template="gate-trigger-btn"] button { background: transparent !important; border: none !important; font-size: 52px !important; line-height: 1 !important; padding: 0 !important; cursor: pointer !important; box-shadow: none !important; margin: 0 auto 8px auto !important; display: block !important; transition: transform 0.2s ease; } div[element-template="gate-trigger-btn"] button:hover { transform: scale(1.08); } div[element-template="gate-trigger-btn"] button:active { background: transparent !important; } </style> <div class="gate-wrap"> <div class="gate-hero">""", unsafe_allow_html=True)
+
+    st.markdown('<div element-template="gate-trigger-btn">', unsafe_allow_html=True)
+
+    if st.button("🎯", key="gate_admin_trigger_btn"):
+
+        st.session_state.gate_admin_click_count += 1
+
+        if st.session_state.gate_admin_click_count >= 5:
+
+            st.session_state.show_gate_admin = True
+
+            st.toast("🔑 관리자 로그인 메뉴가 활성화되었습니다!", icon="🔓")
+
+        st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("""<div class="gate-title">FiboAnalyzer</div> <div class="gate-sub">피보나치 AI 멀티타임프레임 분석 플랫폼<br>허가된 사용자만 이용할 수 있습니다.</div> </div> </div>""", unsafe_allow_html=True)
 
     st.write("")
 
@@ -672,43 +698,63 @@ def _render_access_gate():
 
     # ── 관리자 직접 접속 (비밀번호 입력 시 즉시 승인) ──
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    if st.session_state.get("show_gate_admin", False):
 
-    with st.expander("🔑 관리자로 접속", expanded=False):
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        st.caption("관리자 비밀번호를 입력하면 이 브라우저에 즉시 접근 권한을 부여합니다.")
+        with st.expander("🔑 관리자로 접속", expanded=True):
 
-        with st.form("admin_direct_login_form"):
+            st.caption("관리자 비밀번호를 입력하면 이 브라우저에 즉시 접근 권한을 부여합니다.")
 
-            admin_direct_pw = st.text_input("관리자 비밀번호", type="password", placeholder="비밀번호 입력")
+            with st.form("admin_direct_login_form"):
 
-            admin_login_btn = st.form_submit_button("🚀 관리자 접속", use_container_width=True)
+                admin_direct_pw = st.text_input("관리자 비밀번호", type="password", placeholder="비밀번호 입력").strip()
 
-        if admin_login_btn:
+                admin_login_btn = st.form_submit_button("🚀 관리자 접속", use_container_width=True)
 
-            if access_manager.verify_admin_password(admin_direct_pw):
+            if admin_login_btn:
 
-                db = access_manager.load_access_db(force_reload=True)
+                if access_manager.verify_admin_password(admin_direct_pw):
 
-                if token not in db["approved"]:
+                    db = access_manager.load_access_db(force_reload=True)
 
-                    db["approved"].append(token)
+                    if token not in db["approved"]:
+
+                        db["approved"].append(token)
 
                     db["pending"] = [e for e in db["pending"] if e.get("token") != token]
 
                     db["denied"] = [t for t in db["denied"] if t != token]
 
+                    if "users" not in db:
+
+                        db["users"] = {}
+
+                    db["users"]["admin"] = {
+
+                        "password_hash": hashlib.sha256(admin_direct_pw.encode("utf-8")).hexdigest(),
+
+                        "token": token,
+
+                        "name": "관리자",
+
+                        "created_at": db["users"].get("admin", {}).get("created_at", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+
+                    }
+
                     access_manager.save_access_db(db)
 
-                st.success("✅ 관리자 접속 승인!")
+                    st.session_state.logged_in_user = "admin"
 
-                st.balloons()
+                    st.success("✅ 관리자 접속 승인!")
 
-                st.rerun()
+                    st.balloons()
 
-            else:
+                    st.rerun()
 
-                st.error("❌ 비밀번호가 올바르지 않습니다.")
+                else:
+
+                    st.error(f"❌ 비밀번호가 올바르지 않습니다. (입력글자수: {len(admin_direct_pw)}, 입력해시: {hashlib.sha256(admin_direct_pw.encode('utf-8')).hexdigest()[:8]}... vs 저장해시: {access_manager.get_admin_hash()[:8]}...)")
 
     st.stop()
 
