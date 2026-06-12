@@ -224,6 +224,33 @@ LAST_USER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_
 
 UI_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui_settings.json")
 
+def apply_profile_settings(settings: dict):
+    """프로필 설정 딕셔너리를 세션 상태 및 각 서브시스템에 적용"""
+    # 즐겨찾기 적용
+    if settings.get("favorites"):
+        parsed = []
+        for item in settings["favorites"].split("|"):
+            if ":" in item:
+                name, ticker = item.split(":", 1)
+                parsed.append((name.strip().upper(), ticker.strip().upper()))
+        if parsed:
+            st.session_state.favorites = parsed
+    # 텔레그램 설정 적용
+    if settings.get("tg_token") is not None or settings.get("tg_chat_id") is not None:
+        alert_manager.set_telegram_config(
+            settings.get("tg_token", ""),
+            settings.get("tg_chat_id", "")
+        )
+    # UI 설정 적용
+    if "show_virtual_trading" in settings:
+        st.session_state.show_virtual_trading = bool(settings["show_virtual_trading"])
+    # 가상 매매 닉네임
+    if settings.get("virtual_user_id"):
+        st.session_state.virtual_user_id = settings["virtual_user_id"]
+    # Gemini API Key
+    if settings.get("gemini_api_key"):
+        st.session_state["_saved_gemini_api_key"] = settings["gemini_api_key"]
+
 # ────────────────────────────────────────────────────────────
 
 # 🔐 접근 제어 게이트 (Access Control Gate)
@@ -945,58 +972,6 @@ def get_asset_korean_name(ticker, english_name=""):
     
 
     return english_name
-
-def apply_profile_settings(settings: dict):
-
-    """프로필 설정 딕셔너리를 세션 상태 및 각 서브시스템에 적용"""
-
-    # 즐겨찾기 적용
-
-    if settings.get("favorites"):
-
-        parsed = []
-
-        for item in settings["favorites"].split("|"):
-
-            if ":" in item:
-
-                name, ticker = item.split(":", 1)
-
-                parsed.append((name.strip().upper(), ticker.strip().upper()))
-
-        if parsed:
-
-            st.session_state.favorites = parsed
-
-    # 텔레그램 설정 적용
-
-    if settings.get("tg_token") is not None or settings.get("tg_chat_id") is not None:
-
-        alert_manager.set_telegram_config(
-
-            settings.get("tg_token", ""),
-
-            settings.get("tg_chat_id", "")
-
-        )
-
-    # UI 설정 적용
-
-    if "show_virtual_trading" in settings:
-
-        st.session_state.show_virtual_trading = bool(settings["show_virtual_trading"])
-
-    # 가상 매매 닉네임
-
-    if settings.get("virtual_user_id"):
-
-        st.session_state.virtual_user_id = settings["virtual_user_id"]
-
-    # Gemini API Key
-
-    if settings.get("gemini_api_key"):
-
-        st.session_state["_saved_gemini_api_key"] = settings["gemini_api_key"]
 
 def load_ui_settings():
 
