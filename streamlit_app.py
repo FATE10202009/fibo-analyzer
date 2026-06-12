@@ -2053,19 +2053,34 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 ## 3. 타임프레임별 피보나치 상세 레벨
 
 ### 🌐 L Size (All-Time) 상세 레벨
+<details open>
+<summary><b>🌐 L Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(l_levels, current_price, rate, is_usd)}
+</details>
 
 ### 📅 M Size (Nested L) 상세 레벨
+<details open>
+<summary><b>📅 M Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(m_levels, current_price, rate, is_usd)}
+</details>
 
 ### 📆 S Size (Nested M) 상세 레벨
+<details open>
+<summary><b>📆 S Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(s_levels, current_price, rate, is_usd)}
+</details>
 
 ### ⏰ XS Size (Nested S) 상세 레벨
+<details open>
+<summary><b>⏰ XS Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(xs_levels, current_price, rate, is_usd)}
+</details>
 
 ### ⏳ T Size (Yesterday) 상세 레벨
+<details open>
+<summary><b>⏳ T Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(t_levels, current_price, rate, is_usd)}
+</details>
 
 ---
 

@@ -439,29 +439,34 @@ def run_analysis_async(search_query, market_opt="all", interval="1d", session_id
 ## 3. 각 타임프레임별 세부 피보나치 레벨
 
 ### 🌐 L Size (All-Time) 상세 레벨
-| 피보나치 비율 | 레벨 구분 | 타겟 가격 | 현재가와의 이격 |
-| :--- | :--- | :--- | :--- |
+<details open>
+<summary><b>🌐 L Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(l_levels, current_price, rate, is_usd)}
+</details>
 
 ### 📊 T Size (Yesterday's Range) 상세 레벨
-| 피보나치 비율 | 레벨 구분 | 타겟 가격 | 현재가와의 이격 |
-| :--- | :--- | :--- | :--- |
+<details open>
+<summary><b>⏳ T Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(t_levels, current_price, rate, is_usd)}
+</details>
 
 ### 📅 M Size (Nested L) 상세 레벨
-| 피보나치 비율 | 레벨 구분 | 타겟 가격 | 현재가와의 이격 |
-| :--- | :--- | :--- | :--- |
+<details open>
+<summary><b>📅 M Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(m_levels, current_price, rate, is_usd)}
+</details>
 
 ### 📆 S Size (Nested M) 상세 레벨
-| 피보나치 비율 | 레벨 구분 | 타겟 가격 | 현재가와의 이격 |
-| :--- | :--- | :--- | :--- |
+<details open>
+<summary><b>📆 S Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(s_levels, current_price, rate, is_usd)}
+</details>
 
 ### ⏰ XS Size (Nested S) 상세 레벨
-| 피보나치 비율 | 레벨 구분 | 타겟 가격 | 현재가와의 이격 |
-| :--- | :--- | :--- | :--- |
+<details open>
+<summary><b>⏰ XS Size 상세 레벨 표 열기/접기</b></summary>
 {make_fib_markdown_table(xs_levels, current_price, rate, is_usd)}
+</details>
 
 ---
 
