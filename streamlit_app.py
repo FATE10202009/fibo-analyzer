@@ -215,143 +215,74 @@ components.html(
 # Custom Sleek Dark Mode Styling (Glassmorphism & Harmonious Colors)
 
 st.markdown("""
-
 <style>
-
     /* 전체 배경색 및 폰트 설정 */
-
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Noto+Sans+KR:wght@300;400;700&display=swap');
-
     
-
     html, body, [data-testid="stAppViewContainer"] {
-
         font-family: 'Outfit', 'Noto Sans KR', sans-serif;
-
         background-color: #0F0F12;
-
         color: #E2E8F0;
-
     }
-
     
-
     /* 사이드바 스타일링 */
-
     [data-testid="stSidebar"] {
-
         background-color: #16161D;
-
         border-right: 1px solid #2D2D3A;
-
     }
-
     
-
     /* 카드 컴포넌트 클래스 정의 */
-
     .dashboard-card {
-
         background: rgba(30, 30, 40, 0.45);
-
         backdrop-filter: blur(12px);
-
         -webkit-backdrop-filter: blur(12px);
-
         border: 1px solid rgba(255, 255, 255, 0.08);
-
         border-radius: 16px;
-
         padding: 24px;
-
         margin-bottom: 20px;
-
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-
         transition: transform 0.2s ease, border-color 0.2s ease;
-
     }
-
     
-
     .dashboard-card:hover {
-
         transform: translateY(-2px);
-
         border-color: rgba(41, 121, 255, 0.4);
-
     }
-
     
-
     /* KPI 카드 스타일 */
-
     .kpi-title {
-
         color: #94A3B8;
-
         font-size: 14px;
-
         font-weight: 600;
-
         margin-bottom: 6px;
-
         text-transform: uppercase;
-
         letter-spacing: 0.5px;
-
     }
-
     
-
     .kpi-val {
-
         font-size: 26px;
-
         font-weight: 700;
-
         background: linear-gradient(45deg, #38BDF8, #818CF8);
-
         -webkit-background-clip: text;
-
         -webkit-text-fill-color: transparent;
-
     }
-
     
-
     .kpi-desc {
-
         color: #64748B;
-
         font-size: 12px;
-
         margin-top: 4px;
-
     }
-
     
-
     /* 헤더 그라데이션 타이틀 */
-
     .title-gradient {
-
         background: linear-gradient(135deg, #60A5FA 10%, #3B82F6 50%, #818CF8 90%);
-
         -webkit-background-clip: text;
-
         -webkit-text-fill-color: transparent;
-
         font-weight: 800;
-
         letter-spacing: -0.5px;
-
         margin-bottom: 5px;
-
     }
-
 </style>
-
 """, unsafe_allow_html=True)
 
 # 즐겨찾기 파일 경로 설정
@@ -465,90 +396,48 @@ def _render_access_gate():
     # ── 공통 스타일 ──
 
     st.markdown("""
-
-    <style>
-
+<style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Noto+Sans+KR:wght@400;700&display=swap');
-
     .gate-wrap {
-
         max-width: 480px;
-
         margin: 30px auto 0 auto;
-
     }
-
     .gate-hero {
-
         text-align: center;
-
         padding: 32px 24px 20px 24px;
-
         background: rgba(15,15,20,0.9);
-
         border: 1px solid rgba(96,165,250,0.2);
-
         border-radius: 20px 20px 0 0;
-
         box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-
     }
-
     .gate-icon { font-size: 52px; margin-bottom: 8px; }
-
     .gate-title {
-
         font-size: 24px; font-weight: 800;
-
         background: linear-gradient(135deg, #60A5FA, #818CF8);
-
         -webkit-background-clip: text;
-
         -webkit-text-fill-color: transparent;
-
         margin-bottom: 6px;
-
     }
-
     .gate-sub { color: #94A3B8; font-size: 13px; line-height: 1.7; }
-
     .gate-badge-pending {
-
         display:inline-block; background:rgba(251,191,36,0.15);
-
         border:1px solid rgba(251,191,36,0.4); color:#FBBF24;
-
         border-radius:999px; padding:4px 18px; font-size:13px; font-weight:600;
-
     }
-
     .gate-badge-denied {
-
         display:inline-block; background:rgba(239,68,68,0.15);
-
         border:1px solid rgba(239,68,68,0.4); color:#EF4444;
-
         border-radius:999px; padding:4px 18px; font-size:13px; font-weight:600;
-
     }
-
     </style>
-
     <div class="gate-wrap">
-
     <div class="gate-hero">
-
         <div class="gate-icon">🎯</div>
-
         <div class="gate-title">FiboAnalyzer</div>
-
         <div class="gate-sub">피보나치 AI 멀티타임프레임 분석 플랫폼<br>허가된 사용자만 이용할 수 있습니다.</div>
-
     </div>
-
     </div>
-
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
     st.write("")
 
@@ -575,30 +464,18 @@ def _render_access_gate():
                 break
 
         st.markdown(f"""
-
-        <div style="max-width:480px; margin:0 auto; background:rgba(251,191,36,0.08);
-
+<div style="max-width:480px; margin:0 auto; background:rgba(251,191,36,0.08);
             border:1px solid rgba(251,191,36,0.3); border-radius:0 0 16px 16px;
-
             padding:28px 32px; text-align:center;">
-
             <div class="gate-badge-pending">⏳ 승인 대기 중</div>
-
             <p style="color:#94A3B8; font-size:14px; margin-top:14px; line-height:1.8;">
-
                 접속 신청이 접수되었습니다.<br>
-
                 관리자 승인 후 <b style="color:#FBBF24;">아이디/비밀번호로 로그인</b>하세요.<br>
-
                 {'<b style="color:#60A5FA;">아이디: ' + my_uid + '</b><br>' if my_uid else ''}
-
                 이 페이지를 새로고침하여 승인 여부를 확인하세요.
-
             </p>
-
         </div>
-
-        """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════
 
@@ -609,26 +486,16 @@ def _render_access_gate():
     elif status == "denied":
 
         st.markdown(f"""
-
-        <div style="max-width:480px; margin:0 auto; background:rgba(239,68,68,0.08);
-
+<div style="max-width:480px; margin:0 auto; background:rgba(239,68,68,0.08);
             border:1px solid rgba(239,68,68,0.3); border-radius:0 0 16px 16px;
-
             padding:28px 32px; text-align:center;">
-
             <div class="gate-badge-denied">🚫 접근 거부</div>
-
             <p style="color:#94A3B8; font-size:14px; margin-top:14px; line-height:1.8;">
-
                 관리자가 귀하의 접속 신청을 거부했습니다.<br>
-
                 문의가 필요하시면 관리자에게 연락해 주세요.
-
             </p>
-
         </div>
-
-        """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════
 
@@ -639,16 +506,11 @@ def _render_access_gate():
     else:
 
         st.markdown("""
-
-        <div style="max-width:480px; margin:0 auto; background:rgba(15,15,25,0.7);
-
+<div style="max-width:480px; margin:0 auto; background:rgba(15,15,25,0.7);
             border:1px solid rgba(255,255,255,0.06); border-radius:0 0 16px 16px;
-
             padding:4px 0 0 0;">
-
         </div>
-
-        """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
         login_tab, apply_tab = st.tabs(["🔓 로그인", "✍️ 신규 신청"])
 
@@ -661,16 +523,11 @@ def _render_access_gate():
         with login_tab:
 
             st.markdown("""
-
-            <p style='color:#94A3B8; font-size:13px; margin:8px 0 14px 0; line-height:1.7;'>
-
+<p style='color:#94A3B8; font-size:13px; margin:8px 0 14px 0; line-height:1.7;'>
             신청 승인 후 발급된 <b style="color:#60A5FA;">아이디/비밀번호</b>로 로그인하세요.<br>
-
             <span style='color:#818CF8; font-size:12px;'>💡 "아이디 기억"을 체크하면 다음 방문 시 자동 입력됩니다.</span>
-
             </p>
-
-            """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
             with st.form("id_pw_login_form", clear_on_submit=False):
 
@@ -805,16 +662,11 @@ def _render_access_gate():
         with apply_tab:
 
             st.markdown("""
-
-            <p style='color:#94A3B8; font-size:13px; margin:8px 0 14px 0; line-height:1.7;'>
-
+<p style='color:#94A3B8; font-size:13px; margin:8px 0 14px 0; line-height:1.7;'>
             아이디, 이름, 비밀번호를 입력하고 접속을 신청하세요.<br>
-
             관리자가 승인하면 입력한 <b style="color:#60A5FA;">아이디/비밀번호</b>로 로그인할 수 있습니다.
-
             </p>
-
-            """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
             with st.form("access_request_form", clear_on_submit=False):
 
@@ -1989,16 +1841,11 @@ def render_alert_section(current_ticker):
 def render_virtual_trading_panel(results):
 
     st.markdown("""
-
-    <div style="background: rgba(30, 30, 40, 0.45); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);">
-
+<div style="background: rgba(30, 30, 40, 0.45); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);">
         <h3 style="color:#60A5FA; margin-top:0px; margin-bottom:5px; font-size: 20px;">💸 실시간 가상 매매 (Mock Trading)</h3>
-
         <p style="color:#94A3B8; font-size:12px; margin-bottom:0px;">포트폴리오 통합 조회 및 원클릭 매매 패널</p>
-
     </div>
-
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
     
 
@@ -3413,46 +3260,26 @@ with st.sidebar:
     st.write("---")
 
     st.markdown("""
-
-    <style>
-
+<style>
     div[element-template="copyright-btn"] button {
-
         background: transparent !important;
-
         border: none !important;
-
         color: #475569 !important;
-
         padding: 0 !important;
-
         font-size: 11px !important;
-
         text-align: center !important;
-
         cursor: pointer !important;
-
         box-shadow: none !important;
-
     }
-
     div[element-template="copyright-btn"] button:hover {
-
         color: #64748B !important;
-
     }
-
     div[element-template="copyright-btn"] button:active {
-
         background: transparent !important;
-
         color: #94A3B8 !important;
-
     }
-
     </style>
-
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
     with st.container(key="copyright_container"):
 
@@ -4739,17 +4566,11 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 # 1. 최상단 실시간 시세 흐르는 전광판 (Marquee) 주입
 
 marquee_html = f"""
-
 <div style="background-color: #121216; border: 1px solid #282834; border-radius: 10px; padding: 10px; overflow: hidden; white-space: nowrap; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.45);">
-
     <marquee scrollamount="4" behavior="scroll" direction="left" onmouseover="this.stop();" onmouseout="this.start();" style="font-family:'Outfit','Noto Sans KR',sans-serif; font-size:13px;">
-
         {get_marquee_prices(st.session_state.favorites, data_source=data_source)}
-
     </marquee>
-
 </div>
-
 """
 
 st.markdown(marquee_html, unsafe_allow_html=True)
@@ -4807,22 +4628,14 @@ with main_container:
                 with col_info:
 
                     st.markdown(f"""
-
-                    <div style="background: rgba(30, 41, 59, 0.45); border-left: 5px solid #3B82F6; border-radius: 12px; padding: 16px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.25);">
-
+<div style="background: rgba(30, 41, 59, 0.45); border-left: 5px solid #3B82F6; border-radius: 12px; padding: 16px 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.25);">
                         <div style="color: #94A3B8; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">🔍 분석 대상 자산 검증 (입력된 검색어: "{st.session_state.search_ticker}")</div>
-
                         <div style="display: flex; align-items: baseline; margin-top: 5px;">
-
                             <span style="color: #FFFFFF; font-size: 22px; font-weight: 700;">{results['asset_name']}</span>
-
                             <span style="color: #38BDF8; font-size: 16px; font-weight: 600; margin-left: 10px;">({results['ticker']})</span>
-
                         </div>
-
                     </div>
-
-                    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
                 with col_star:
 
@@ -4895,72 +4708,48 @@ with main_container:
             with col1:
 
                 st.markdown(f"""
-
-                <div class="dashboard-card">
-
+<div class="dashboard-card">
                     <div class="kpi-title">💵 현재 실시간 가격</div>
-
                     <div class="kpi-val">{fmt_price(results['current_price'], results['rate'], results['is_usd'])}</div>
-
                     <div class="kpi-desc">환율 1$ = {results['rate']:,.2f}원 적용</div>
-
                 </div>
-
-                """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
                 
 
             with col2:
 
                 st.markdown(f"""
-
-                <div class="dashboard-card">
-
+<div class="dashboard-card">
                     <div class="kpi-title">🎯 종합 기술 점수</div>
-
                     <div class="kpi-val">{results['composite_score']} / 100점</div>
-
                     <div class="kpi-desc">최종 판단: {results['score_label']}</div>
-
                 </div>
-
-                """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
                 
 
             with col3:
 
                 st.markdown(f"""
-
-                <div class="dashboard-card">
-
+<div class="dashboard-card">
                     <div class="kpi-title">💡 최적의 분할매수(DCA) 타점</div>
-
                     <div class="kpi-val">{results['best_buy_str']}</div>
-
                     <div class="kpi-desc">{results.get('best_buy_desc', '역사적 피보나치 기준')}</div>
-
                 </div>
-
-                """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
                 
 
             with col4:
 
                 st.markdown(f"""
-
-                <div class="dashboard-card">
-
+<div class="dashboard-card">
                     <div class="kpi-title">📢 컨센서스 / 최종의견</div>
-
                     <div class="kpi-val">{results['rec_ko']}</div>
-
                     <div class="kpi-desc">애널리스트 및 지표 가중치 종합</div>
-
                 </div>
-
-                """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
             # ────────────────────────────────────────────────────────────
 
