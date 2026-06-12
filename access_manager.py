@@ -105,8 +105,14 @@ def check_access(token: str) -> AccessStatus:
 # ──────────────────────────────────────────────────────────────────────────────
 # 신청 등록
 # ──────────────────────────────────────────────────────────────────────────────
-def add_pending(token: str, name: str, reason: str) -> bool:
-    """신규 접속 신청을 대기 목록에 추가합니다. 이미 등록된 토큰이면 False 반환."""
+def add_pending(token: str, name: str, reason: str,
+                user_id: str = "", password: str = "") -> bool:
+    """
+    신규 접속 신청을 대기 목록에 추가합니다.
+    - user_id  : 사용할 아이디 (입력 시 비밀번호와 함께 저장)
+    - password : 비밀번호 (평문; 내부에서 해시 후 저장)
+    이미 등록된 토큰 또는 아이디면 False 반환.
+    """
     db = load_access_db(force_reload=True)
     # 이미 존재하는 토큰인지 확인
     if token in db.get("approved", []):
@@ -117,12 +123,25 @@ def add_pending(token: str, name: str, reason: str) -> bool:
         if isinstance(entry, dict) and entry.get("token") == token:
             return False  # 이미 신청됨
 
+    # 아이디 중복 확인 (accounts + pending 모두)
+    uid = user_id.strip()
+    if uid:
+        if uid in db.get("users", {}):
+            return False  # 아이디 이미 사용 중
+        for e in db.get("pending", []):
+            if isinstance(e, dict) and e.get("user_id") == uid:
+                return False  # 아이디 신청 중
+
     entry = {
         "token": token,
         "name": name.strip(),
         "reason": reason.strip(),
         "requested_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     }
+    if uid and password:
+        entry["user_id"] = uid
+        entry["password_hash"] = _hash_password(password)
+
     db["pending"].append(entry)
     save_access_db(db)
     return True
@@ -132,20 +151,38 @@ def add_pending(token: str, name: str, reason: str) -> bool:
 # 관리자 승인 / 거부
 # ──────────────────────────────────────────────────────────────────────────────
 def approve_user(token: str) -> bool:
-    """pending 목록의 토큰을 approved 로 이동합니다."""
+    """
+    pending 목록의 토큰을 approved 로 이동하고,
+    pending 항목에 user_id/password_hash가 있으면 계정도 자동 생성합니다.
+    """
     db = load_access_db(force_reload=True)
     new_pending = []
-    found = False
+    approved_entry = None
     for entry in db.get("pending", []):
         if isinstance(entry, dict) and entry.get("token") == token:
-            found = True
+            approved_entry = entry
         else:
             new_pending.append(entry)
-    if not found:
+    if approved_entry is None:
         return False
     db["pending"] = new_pending
     if token not in db["approved"]:
         db["approved"].append(token)
+
+    # 아이디/비밀번호가 신청 데이터에 있으면 계정 자동 생성
+    uid = approved_entry.get("user_id", "").strip()
+    pw_hash = approved_entry.get("password_hash", "")
+    if uid and pw_hash:
+        if "users" not in db:
+            db["users"] = {}
+        if uid not in db["users"]:
+            db["users"][uid] = {
+                "password_hash": pw_hash,
+                "token": token,
+                "name": approved_entry.get("name", ""),
+                "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            }
+
     save_access_db(db)
     return True
 
@@ -374,4 +411,29 @@ def get_user_id_by_token(token: str) -> str:
         if info.get("token") == token:
             return uid
     return ""
+
+
+def save_user_settings(user_id: str, settings: dict) -> bool:
+    """사용자의 맞춤 설정을 access_control.json에 저장합니다."""
+    user_id = user_id.strip()
+    db = load_access_db(force_reload=True)
+    if "users" not in db or user_id not in db["users"]:
+        return False
+    
+    if "settings" not in db["users"][user_id]:
+        db["users"][user_id]["settings"] = {}
+        
+    db["users"][user_id]["settings"].update(settings)
+    save_access_db(db)
+    return True
+
+
+def get_user_settings(user_id: str) -> dict:
+    """사용자의 맞춤 설정을 access_control.json에서 불러옵니다."""
+    user_id = user_id.strip()
+    db = load_access_db(force_reload=True)
+    if "users" not in db or user_id not in db["users"]:
+        return {}
+    return db["users"][user_id].get("settings", {})
+
 

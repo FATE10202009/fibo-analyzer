@@ -26,3 +26,10 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 .DS_Store
+
+# FiboAnalyzer 접근 제어 및 사용자 개인 설정 데이터 (보안 민감 정보)
+access_control.json
+last_virtual_user.txt
+ui_settings.json
+virtual_data/
+
