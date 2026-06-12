@@ -649,6 +649,18 @@ if "show_virtual_trading" not in st.session_state:
     _ui_settings = load_ui_settings()
     st.session_state.show_virtual_trading = _ui_settings.get("show_virtual_trading", True)
 
+if "admin_click_count" not in st.session_state:
+    st.session_state.admin_click_count = 0
+
+if "show_admin_panel" not in st.session_state:
+    st.session_state.show_admin_panel = False
+
+if "show_ai_chat" not in st.session_state:
+    st.session_state.show_ai_chat = False
+
+if "show_telegram_config" not in st.session_state:
+    st.session_state.show_telegram_config = False
+
 # 가상 매매(모의 투자) 사용자 ID 초기화
 if "virtual_user_id" not in st.session_state:
     if "user" in st.query_params:
@@ -1352,33 +1364,25 @@ with st.sidebar:
     # 🚨 텔레그램 알림 설정
     # ────────────────────────────────────────────────────────────
     st.write("---")
-    with st.expander("🚨 텔레그램 알림 설정"):
-        st.subheader("🔑 텔레그램 연동 설정")
-        render_telegram_config_section()
-        
+    tg_btn_label = "🔔 텔레그램 알림 설정 닫기 ✖" if st.session_state.show_telegram_config else "🔔 텔레그램 알림 설정 열기 🔓"
+    if st.button(tg_btn_label, key="toggle_telegram_config_btn", use_container_width=True):
+        st.session_state.show_telegram_config = not st.session_state.show_telegram_config
+        st.rerun()
+
+    if st.session_state.show_telegram_config:
+        with st.expander("🚨 텔레그램 알림 설정", expanded=True):
+            st.subheader("🔑 텔레그램 연동 설정")
+            render_telegram_config_section()
+            
+            st.write("---")
+            render_alert_section(st.session_state.search_ticker)
+
+    # ────────────────────────────────────────────────────────────
+    # 🛡️ 관리자 패널 (접근 제어 관리) - 5회 클릭 시에만 표시됨
+    # ────────────────────────────────────────────────────────────
+    if st.session_state.show_admin_panel:
         st.write("---")
-        render_alert_section(st.session_state.search_ticker)
-
-
-
-    st.write("---")
-    st.subheader("⚙️ 화면 설정")
-    show_virtual_trading = st.toggle(
-        "💸 실시간 가상 매매 패널 표시",
-        value=st.session_state.show_virtual_trading,
-        key="show_virtual_trading_toggle",
-        help="체크 해제 시 가상 매매 사이드 패널을 숨기고 분석 리포트를 넓게 볼 수 있습니다."
-    )
-    # 설정이 변경되었으면 세션 상태와 파일에 즉시 저장
-    if show_virtual_trading != st.session_state.show_virtual_trading:
-        st.session_state.show_virtual_trading = show_virtual_trading
-        save_ui_settings({"show_virtual_trading": show_virtual_trading})
-
-    # ────────────────────────────────────────────────────────────
-    # 🛡️ 관리자 패널 (접근 제어 관리)
-    # ────────────────────────────────────────────────────────────
-    st.write("---")
-    with st.expander("🛡️ 관리자 패널", expanded=False):
+        st.subheader("🛡️ 관리자 패널")
         # 관리자 인증 세션 초기화
         if "admin_authenticated" not in st.session_state:
             st.session_state.admin_authenticated = False
@@ -1484,6 +1488,41 @@ with st.sidebar:
                             db2["pending"] = [e for e in db2["pending"] if e.get("token") != my_token]
                             access_manager.save_access_db(db2)
                         st.success("✅ 토큰이 승인 목록에 추가되었습니다. 페이지를 새로고침하면 정상 접속됩니다.")
+
+    # 사이드바 최하단 저작권 표시 및 5회 클릭 시 관리자 패널 활성화 트리거
+    st.write("---")
+    st.markdown("""
+    <style>
+    div[element-template="copyright-btn"] button {
+        background: transparent !important;
+        border: none !important;
+        color: #475569 !important;
+        padding: 0 !important;
+        font-size: 11px !important;
+        text-align: center !important;
+        cursor: pointer !important;
+        box-shadow: none !important;
+    }
+    div[element-template="copyright-btn"] button:hover {
+        color: #64748B !important;
+    }
+    div[element-template="copyright-btn"] button:active {
+        background: transparent !important;
+        color: #94A3B8 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    with st.container(key="copyright_container"):
+        st.markdown('<div element-template="copyright-btn" style="text-align: center; margin-top: 15px;">', unsafe_allow_html=True)
+        if st.button("© 2026 FiboAnalyzer. All rights reserved.", key="copyright_click_btn", use_container_width=True):
+            st.session_state.admin_click_count += 1
+            if st.session_state.admin_click_count >= 5:
+                st.session_state.show_admin_panel = True
+                st.toast("🛡️ 관리자 패널이 활성화되었습니다!", icon="🔓")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ────────────────────────────────────────────────────────────
 # 자산 전환에 따른 채팅 내역 초기화 (React DOM NotFoundError 방지 핵심)
@@ -2213,7 +2252,7 @@ with main_container:
         # ────────────────────────────────────────────────────────────
         # 1. 4구역 KPI 핵심 카드 섹션
         # ────────────────────────────────────────────────────────────
-        if show_virtual_trading:
+        if st.session_state.show_virtual_trading:
             left_col, right_col = st.columns([0.62, 0.38], gap="medium")
         else:
             left_col = st.container()
@@ -2256,6 +2295,23 @@ with main_container:
                     <div class="kpi-desc">애널리스트 및 지표 가중치 종합</div>
                 </div>
                 """, unsafe_allow_html=True)
+
+            # ────────────────────────────────────────────────────────────
+            # 실시간 가상매매 / AI 대화창 열기 및 닫기 토글 버튼
+            # ────────────────────────────────────────────────────────────
+            col_btns = st.columns(2)
+            with col_btns[0]:
+                vt_btn_label = "💸 실시간 가상매매 패널 닫기 ✖" if st.session_state.show_virtual_trading else "💸 실시간 가상매매 패널 열기 🔓"
+                if st.button(vt_btn_label, key=f"toggle_virtual_trading_main_btn_{results['ticker']}", use_container_width=True):
+                    st.session_state.show_virtual_trading = not st.session_state.show_virtual_trading
+                    save_ui_settings({"show_virtual_trading": st.session_state.show_virtual_trading})
+                    st.rerun()
+            with col_btns[1]:
+                chat_btn_label = "💬 AI 금융비서 대화방 닫기 ✖" if st.session_state.show_ai_chat else "💬 AI 금융비서 대화방 열기 🔓"
+                if st.button(chat_btn_label, key=f"toggle_ai_chat_main_btn_{results['ticker']}", use_container_width=True):
+                    st.session_state.show_ai_chat = not st.session_state.show_ai_chat
+                    st.rerun()
+            st.write("")
     
             # ────────────────────────────────────────────────────────────
             # 2. Plotly 인터랙티브 차트 시각화 섹션 (탭 적용)
@@ -2386,64 +2442,75 @@ with main_container:
             st.markdown(results['report_markdown'], unsafe_allow_html=True)
     
             # ────────────────────────────────────────────────────────────
-            # 4. 실시간 AI Q&A 인터랙티브 채팅 섹션 (안전한 컨테이너 감싸기)
+            # 4. 실시간 AI Q&A 인터랙티브 채팅 섹션 (안전한 컨테이너 감싸기) (토글식 개편)
             # ────────────────────────────────────────────────────────────
-            st.write("---")
-            st.subheader("🤖 FiboAnalyzer AI 금융비서와 실시간 대화")
-            st.markdown("<p style='color:#64748B; font-size:13px;'>현재 보고서의 수치, 피보나치 지지선 및 지표 정보를 토대로 자유롭게 금융 비서에게 물어보세요.</p>", unsafe_allow_html=True)
-            
-            # 채팅 영역용 고유 서브컨테이너 생성 (React DOM 충돌 차단)
-            chat_container = st.container(key=f"chat_section_container_{results['ticker']}")
-            
-            with chat_container:
-                # 웰컴 메시지 부재 시 삽입
-                if not st.session_state.messages:
-                    st.session_state.messages.append({
-                        "role": "assistant", 
-                        "content": f"🤖 안녕하세요! **{results['ticker']}** 분석 보고서를 완벽히 학습했습니다. 궁금한 지지 구간이나 향후 투자 전략에 대해 질문해 주세요!"
-                    })
-                    
-                # 이전 메시지 렌더링
-                for idx, msg in enumerate(st.session_state.messages):
-                    with st.chat_message(msg["role"]):
-                        st.markdown(msg["content"])
+            if st.session_state.show_ai_chat:
+                st.write("---")
+                col_chat_title, col_chat_close = st.columns([0.8, 0.2])
+                col_chat_title.subheader("🤖 AI 금융비서와 실시간 대화")
+                if col_chat_close.button("대화창 닫기 ✖", key=f"close_ai_chat_btn_{results['ticker']}", use_container_width=True):
+                    st.session_state.show_ai_chat = False
+                    st.rerun()
+                st.markdown("<p style='color:#64748B; font-size:13px;'>현재 보고서의 수치, 피보나치 지지선 및 지표 정보를 토대로 자유롭게 금융 비서에게 물어보세요.</p>", unsafe_allow_html=True)
+                
+                # 채팅 영역용 고유 서브컨테이너 생성 (React DOM 충돌 차단)
+                chat_container = st.container(key=f"chat_section_container_{results['ticker']}")
+                
+                with chat_container:
+                    # 웰컴 메시지 부재 시 삽입
+                    if not st.session_state.messages:
+                        st.session_state.messages.append({
+                            "role": "assistant", 
+                            "content": f"🤖 안녕하세요! **{results['ticker']}** 분석 보고서를 완벽히 학습했습니다. 궁금한 지지 구간이나 향후 투자 전략에 대해 질문해 주세요!"
+                        })
                         
-                # 사용자 질문 받기 (고유 키 적용)
-                if user_query := st.chat_input("질문을 입력해 주세요. (예: 1차 매수 타점 가격은 원화로 얼마인가요?)", key=f"chat_input_field_{results['ticker']}"):
-                    # 1. 사용자 입력 메시지 표시 및 저장
-                    with st.chat_message("user"):
-                        st.markdown(user_query)
-                    st.session_state.messages.append({"role": "user", "content": user_query})
-                    
-                    # 2. Gemini API 호출하여 응답 얻기
-                    with st.chat_message("assistant"):
-                        with st.spinner("금융 비서가 분석 리포트를 확인하고 답변을 작성 중입니다..."):
-                            try:
-                                # 대화 이력을 ai_analyzer용 포맷으로 가공
-                                chat_history = []
-                                for m in st.session_state.messages[:-1]: # 현재 질문 전까지의 기록
-                                    role_str = "사용자" if m["role"] == "user" else "AI비서"
-                                    chat_history.append((role_str, m["content"]))
+                    # 이전 메시지 렌더링
+                    for idx, msg in enumerate(st.session_state.messages):
+                        with st.chat_message(msg["role"]):
+                            st.markdown(msg["content"])
+                            
+                    # 사용자 질문 받기 (고유 키 적용)
+                    if user_query := st.chat_input("질문을 입력해 주세요. (예: 1차 매수 타점 가격은 원화로 얼마인가요?)", key=f"chat_input_field_{results['ticker']}"):
+                        # 1. 사용자 입력 메시지 표시 및 저장
+                        with st.chat_message("user"):
+                            st.markdown(user_query)
+                        st.session_state.messages.append({"role": "user", "content": user_query})
+                        
+                        # 2. Gemini API 호출하여 응답 얻기
+                        with st.chat_message("assistant"):
+                            with st.spinner("금융 비서가 분석 리포트를 확인하고 답변을 작성 중입니다..."):
+                                try:
+                                    # 대화 이력을 ai_analyzer용 포맷으로 가공
+                                    chat_history = []
+                                    for m in st.session_state.messages[:-1]: # 현재 질문 전까지의 기록
+                                        role_str = "사용자" if m["role"] == "user" else "AI비서"
+                                        chat_history.append((role_str, m["content"]))
+                                        
+                                    # ask_gemini_qna 호출 (사용자 API 키 전달)
+                                    answer = ask_gemini_qna(
+                                        ticker=results['ticker'],
+                                        report_text=results['report_markdown'],
+                                        question=user_query,
+                                        chat_history=chat_history,
+                                        api_key=user_api_key
+                                    )
+                                    st.markdown(answer)
+                                except Exception as ex:
+                                    answer = f"답변 호출 중 오류가 발생했습니다: {ex}"
+                                    st.error(answer)
                                     
-                                # ask_gemini_qna 호출 (사용자 API 키 전달)
-                                answer = ask_gemini_qna(
-                                    ticker=results['ticker'],
-                                    report_text=results['report_markdown'],
-                                    question=user_query,
-                                    chat_history=chat_history,
-                                    api_key=user_api_key
-                                )
-                                st.markdown(answer)
-                            except Exception as ex:
-                                answer = f"답변 호출 중 오류가 발생했습니다: {ex}"
-                                st.error(answer)
-                                
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                        st.session_state.messages.append({"role": "assistant", "content": answer})
 
 
 
-        if show_virtual_trading:
+        if st.session_state.show_virtual_trading:
             with right_col:
+                col_vt_title, col_vt_close = st.columns([0.75, 0.25])
+                col_vt_title.markdown("### 💸 실시간 가상매매")
+                if col_vt_close.button("닫기 ✖", key="close_virtual_trading_right_btn", use_container_width=True):
+                    st.session_state.show_virtual_trading = False
+                    save_ui_settings({"show_virtual_trading": False})
+                    st.rerun()
                 render_virtual_trading_panel(results)
     except Exception as e:
         import traceback
