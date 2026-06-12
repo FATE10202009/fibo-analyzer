@@ -754,7 +754,7 @@ def _render_access_gate():
 
                 else:
 
-                    st.error(f"❌ 비밀번호가 올바르지 않습니다. (입력글자수: {len(admin_direct_pw)}, 입력해시: {hashlib.sha256(admin_direct_pw.encode('utf-8')).hexdigest()[:8]}... vs 저장해시: {access_manager.get_admin_hash()[:8]}...)")
+                    st.error("❌ 비밀번호가 올바르지 않습니다.")
 
     st.stop()
 
