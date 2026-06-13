@@ -4253,8 +4253,8 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
         else:
 
             # 약세/하락 추세: 깊은 3차 지지선 또는 장기 L 지지선 추천
-
-            l_supports = [c for c in valid_candidates if c[1].startswith('L ')]
+            # 단, 너무 낮은 최저가(현재가의 50% 미만)는 비정상 피보나치로 판정하여 제외
+            l_supports = [c for c in valid_candidates if c[1].startswith('L ') and c[0] >= current_price * 0.5]
 
             if l_supports:
 
@@ -4262,9 +4262,19 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 
             else:
 
-                idx = min(2, len(valid_candidates) - 1)
+                non_l_supports = [c for c in valid_candidates if not c[1].startswith('L ')]
 
-                best_buy, best_buy_source = valid_candidates[idx]
+                if non_l_supports:
+
+                    idx = min(1, len(non_l_supports) - 1)
+
+                    best_buy, best_buy_source = non_l_supports[idx]
+
+                else:
+
+                    idx = min(2, len(valid_candidates) - 1)
+
+                    best_buy, best_buy_source = valid_candidates[idx]
 
             best_buy_desc = f"{best_buy_source} 지지선 기준 (약세 조정대응)"
 
@@ -4307,14 +4317,16 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
         
 
     # 2. 1~3차 목표가 계산 (스케일별 저항 매물대 매칭)
+    # 목표가 연산의 기준점 (추천 진입가가 비정상적으로 너무 낮으면 현재가를 기준으로 위쪽 저항선 탐색)
+    ref_price = max(current_price, best_buy)
 
     targets = []
 
     
 
-    # 1차 목표가: 단기/초단기(S/XS) 저항대 중 best_buy보다 큰 가장 가까운 가격
+    # 1차 목표가: 단기/초단기(S/XS) 저항대 중 ref_price보다 큰 가장 가까운 가격
 
-    s_xs_highs = sorted([p for p in set(list(s_levels.values()) + list(xs_levels.values())) if p > best_buy * 1.001])
+    s_xs_highs = sorted([p for p in set(list(s_levels.values()) + list(xs_levels.values())) if p > ref_price * 1.001])
 
     if s_xs_highs:
 
@@ -4322,9 +4334,9 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 
     else:
 
-        higher_prices = [p for p in all_fib_prices if p > best_buy * 1.001]
+        higher_prices = [p for p in all_fib_prices if p > ref_price * 1.001]
 
-        targets.append(higher_prices[0] if higher_prices else best_buy * 1.05)
+        targets.append(higher_prices[0] if higher_prices else ref_price * 1.05)
 
         
 
@@ -4346,7 +4358,7 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 
     # 3차 목표가: 장기(L) 최종 목표가 (L의 전고점 또는 그 이상의 대파동 저항선)
 
-    l_high_val = l_levels.get('1.000 (고점)', best_buy * 1.25)
+    l_high_val = l_levels.get('1.000 (고점)', ref_price * 1.25)
 
     l_highs = sorted([p for p in l_levels.values() if p > targets[1] * 1.001])
 
