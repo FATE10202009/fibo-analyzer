@@ -273,7 +273,7 @@ def apply_profile_settings(settings: dict):
 
 @st.dialog("🎯 피보나치 핵심 투자 가이드", width="large")
 
-def show_investment_guide(ticker, current_price, best_buy, stop_loss, stop_loss_desc, targets, score_label, score, rate, is_usd):
+def show_investment_guide(ticker, current_price, best_buy, stop_loss, stop_loss_desc, targets, score_label, score, rate, is_usd, average_down_prices=None, stop_loss_2nd=None, stop_loss_2nd_desc=None):
 
     st.markdown(f"### 📊 {ticker} 투자 의사결정 요약 가이드")
 
@@ -305,7 +305,7 @@ def show_investment_guide(ticker, current_price, best_buy, stop_loss, stop_loss_
 
         st.metric(
 
-            label="⚠️ 리스크 손절가 (Stop Loss)", 
+            label="⚠️ 1차 리스크 손절가 (Stop Loss)", 
 
             value=fmt_price(stop_loss, rate, is_usd),
 
@@ -313,7 +313,7 @@ def show_investment_guide(ticker, current_price, best_buy, stop_loss, stop_loss_
 
             delta_color="inverse",
 
-            help=f"직전 지지선 이탈 시 리스크를 방어해야 하는 최종 손절선입니다. ({stop_loss_desc})"
+            help=f"직전 지지선 이탈 시 리스크를 방어해야 하는 1차 최종 손절선입니다. ({stop_loss_desc})"
 
         )
 
@@ -369,6 +369,78 @@ def show_investment_guide(ticker, current_price, best_buy, stop_loss, stop_loss_
 
         
 
+    if average_down_prices and stop_loss_2nd is not None:
+
+        st.write("")
+
+        st.markdown("#### 🚨 1차 손절 실패 시 대응 (물타기 및 2차 손절)")
+
+        ad_cols = st.columns(4)
+
+        with ad_cols[0]:
+
+            st.metric(
+
+                label="💧 물타기 1차 가격 (비중 20%)",
+
+                value=fmt_price(average_down_prices[0], rate, is_usd),
+
+                delta=f"-{((best_buy - average_down_prices[0])/best_buy)*100:.1f}%" if best_buy > 0 else "0.0%",
+
+                delta_color="inverse",
+
+                help="1차 손절을 놓쳤을 시 첫 번째로 평단가를 낮춰볼 수 있는 지지선입니다. (추천 자금: 전체의 20%)"
+
+            )
+
+        with ad_cols[1]:
+
+            st.metric(
+
+                label="💧 물타기 2차 가격 (비중 30%)",
+
+                value=fmt_price(average_down_prices[1], rate, is_usd),
+
+                delta=f"-{((best_buy - average_down_prices[1])/best_buy)*100:.1f}%" if best_buy > 0 else "0.0%",
+
+                delta_color="inverse",
+
+                help="두 번째 주요 피보나치 지지 가격선입니다. (추천 자금: 전체의 30%)"
+
+            )
+
+        with ad_cols[2]:
+
+            st.metric(
+
+                label="🔥 물타기 3차 가격 (비중 50%)",
+
+                value=fmt_price(average_down_prices[2], rate, is_usd),
+
+                delta=f"-{((best_buy - average_down_prices[2])/best_buy)*100:.1f}%" if best_buy > 0 else "0.0%",
+
+                delta_color="inverse",
+
+                help="마지막 지지 장벽인 3차 물타기 가격선입니다. (추천 자금: 전체의 50%)"
+
+            )
+
+        with ad_cols[3]:
+
+            st.metric(
+
+                label="🚫 2차 최종 손절가",
+
+                value=fmt_price(stop_loss_2nd, rate, is_usd),
+
+                delta=f"-{((best_buy - stop_loss_2nd)/best_buy)*100:.1f}%" if best_buy > 0 else "0.0%",
+
+                delta_color="inverse",
+
+                help=f"물타기 3차 진입 이후에도 지지받지 못할 시 리스크 관리를 위해 전량 손절해야 하는 최후의 마지노선입니다. ({stop_loss_2nd_desc})"
+
+            )
+
     st.write("")
 
     with st.expander("📚 각 지표별 상세 가이드 및 대처 요령 읽기", expanded=True):
@@ -381,11 +453,23 @@ def show_investment_guide(ticker, current_price, best_buy, stop_loss, stop_loss_
 
           * *대응*: 이 가격대 근처(±1.5%)에 도달하면 분할 매수로 진입 포지션을 차근차근 모아가는 것이 좋습니다.
 
-        * **🔴 리스크 손절가 (방어)**:
+        * **🔴 1차 리스크 손절가 (방어)**:
 
-          * *설명*: 황금 진입가 아래에 위치한 최종 지지선이 붕괴되어 하방 추세가 가속화될 위험이 높은 가격대입니다.
+          * *설명*: 황금 진입가 아래에 위치한 첫 번째 주요 지지선이 붕괴되어 하방 추세가 가속화될 위험이 높은 가격대입니다.
 
-          * *대응*: 일봉 종가 기준으로 이 가격을 하회하여 마감하면, 리스크 관리 차원에서 포지션을 정리하거나 비중을 축소하는 것을 적극 권장합니다.
+          * *대응*: 일봉 종가 기준으로 이 가격을 하회하여 마감하면, 원칙적으로 리스크 관리 차원에서 포지션을 정리하거나 비중을 축소하는 것을 권장합니다.
+
+        * **💧 물타기 1~3차 대응 전략 (평단 조절)**:
+
+          * *설명*: 1차 손절 대응을 놓친 장기 투자자 또는 단기 하락을 견디는 투자자를 위한 단계별 보조 평단가 방어선입니다.
+
+          * *자금 분할 가이드*: 물타기 진입 시에는 체계적인 분할 투입이 중요합니다. **1차 20% → 2차 30% → 3차 50%**의 비율로 자금을 물타기 지지 가격에서 순차적으로 매수하여 최적의 평단가를 유도하십시오.
+
+        * **🚫 2차 최종 손절가 (최종 탈출선)**:
+
+          * *설명*: 3차 물타기 가격마저 모두 무너져 기술적 지지선이 완전히 파괴된 최악의 단계입니다.
+
+          * *대응*: 이 가격선마저 하회할 경우 추가적인 리스크(지하층 진입)가 매우 크므로, **감정을 배제하고 전량 매도(손절)**하여 잔여 현금을 지키는 것이 철저한 원칙입니다.
 
         * **📈 1~3차 목표가 (수익 실현)**:
 
@@ -4314,6 +4398,46 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 
         stop_loss_desc = "진입가 대비 -7% 고정 비율 기준"
 
+    # 1-2. 물타기 1~3차 및 2차 최종 손절가 동적 계산
+
+    # 1차 손절가(stop_loss)보다 낮은 고유한 피보나치 가격선들을 수집한 뒤 내림차순(높은 가격부터)으로 정렬합니다.
+
+    # 단, 극단적으로 낮은 지지선(현재가 대비 15% 미만)은 피보나치 왜곡 최소화를 위해 배제합니다.
+
+    avg_down_candidates = sorted([p for p in all_fib_prices if p < stop_loss * 0.999 and p >= current_price * 0.15], reverse=True)
+
+    average_down_prices = []
+
+    for i in range(3):
+
+        if i < len(avg_down_candidates):
+
+            average_down_prices.append(avg_down_candidates[i])
+
+        else:
+
+            # 하단 지지선 부족 시: stop_loss 기준 각각 -5%, -10%, -15% 차감
+
+            fallback_pct = 0.05 * (i + 1)
+
+            average_down_prices.append(stop_loss * (1 - fallback_pct))
+
+    # 2차 최종 손절가: 3차 물타기 가격보다 아래에 있는 피보나치 지지선 중 -2% 이탈 가격으로 지정
+
+    lower_than_3rd = sorted([p for p in all_fib_prices if p < average_down_prices[2] * 0.999 and p >= current_price * 0.15], reverse=True)
+
+    if lower_than_3rd:
+
+        stop_loss_2nd = lower_than_3rd[0] * 0.98
+
+        stop_loss_2nd_desc = "3차 물타기 하단 지지선 이탈(-2%) 기준"
+
+    else:
+
+        stop_loss_2nd = average_down_prices[2] * 0.95
+
+        stop_loss_2nd_desc = "3차 물타기 가격 대비 -5% 고정 비율 기준"
+
         
 
     # 2. 1~3차 목표가 계산 (스케일별 저항 매물대 매칭)
@@ -4581,6 +4705,12 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
         'stop_loss': stop_loss,
 
         'stop_loss_desc': stop_loss_desc,
+
+        'average_down_prices': average_down_prices,
+
+        'stop_loss_2nd': stop_loss_2nd,
+
+        'stop_loss_2nd_desc': stop_loss_2nd_desc,
 
         'target_prices': targets,
 
@@ -5290,7 +5420,13 @@ with main_container:
 
                 results['rate'],
 
-                results['is_usd']
+                results['is_usd'],
+
+                average_down_prices=results.get('average_down_prices'),
+
+                stop_loss_2nd=results.get('stop_loss_2nd'),
+
+                stop_loss_2nd_desc=results.get('stop_loss_2nd_desc')
 
             )
 
