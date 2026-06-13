@@ -4284,55 +4284,61 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 
         
 
-    # 2. 1~3차 목표가 계산 (황금가격보다 높은 피보나치 저항선들을 순서대로 추출)
-
-    higher_prices = [p for p in all_fib_prices if p > best_buy * 1.001]
+    # 2. 1~3차 목표가 계산 (스케일별 저항 매물대 매칭)
 
     targets = []
 
     
 
-    # 1차 목표가
+    # 1차 목표가: 단기/초단기(S/XS) 저항대 중 best_buy보다 큰 가장 가까운 가격
 
-    if len(higher_prices) >= 1:
+    s_xs_highs = sorted([p for p in set(list(s_levels.values()) + list(xs_levels.values())) if p > best_buy * 1.001])
 
-        targets.append(higher_prices[0])
+    if s_xs_highs:
+
+        targets.append(s_xs_highs[0])
 
     else:
 
-        targets.append(best_buy * 1.05)
+        higher_prices = [p for p in all_fib_prices if p > best_buy * 1.001]
+
+        targets.append(higher_prices[0] if higher_prices else best_buy * 1.05)
 
         
 
-    # 2차 목표가
+    # 2차 목표가: 중기(M) 저항대 중 1차 목표가보다 큰 가장 가까운 가격
 
-    if len(higher_prices) >= 2:
+    m_highs = sorted([p for p in m_levels.values() if p > targets[0] * 1.001])
 
-        targets.append(higher_prices[1])
+    if m_highs:
+
+        targets.append(m_highs[0])
 
     else:
 
-        targets.append(targets[0] * 1.05)
+        m_fallback = sorted([p for p in all_fib_prices if p > targets[0] * 1.001])
+
+        targets.append(m_fallback[0] if m_fallback else targets[0] * 1.08)
 
         
 
-    # 3차 목표가
+    # 3차 목표가: 장기(L) 최종 목표가 (L의 전고점 또는 그 이상의 대파동 저항선)
 
-    if len(higher_prices) >= 3:
+    l_high_val = l_levels.get('1.000 (고점)', best_buy * 1.25)
 
-        targets.append(higher_prices[2])
+    l_highs = sorted([p for p in l_levels.values() if p > targets[1] * 1.001])
+
+    if l_highs:
+
+        targets.append(l_highs[0])
+
+    elif l_high_val > targets[1] * 1.001:
+
+        targets.append(l_high_val)
 
     else:
 
-        l_high_val = l_levels.get('1.000 (고점)', best_buy * 1.15)
-
-        if l_high_val > targets[-1]:
-
-            targets.append(l_high_val)
-
-        else:
-
-            targets.append(targets[-1] * 1.05)
+        targets.append(targets[1] * 1.15)
 
     # 6. 애널리스트 투자의견 매핑
 
