@@ -224,6 +224,26 @@ LAST_USER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_
 
 UI_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui_settings.json")
 
+# ── [데이터베이스 계정 닉네임 오염 자동 교정 마이그레이션] ──
+
+try:
+
+    _db = access_manager.load_access_db(force_reload=True)
+
+    if "users" in _db and "fate1020" in _db["users"]:
+
+        if _db["users"]["fate1020"].get("name") == "seco4265#":
+
+            _db["users"]["fate1020"]["name"] = "fate1020"
+
+            access_manager.save_access_db(_db)
+
+except Exception as _me:
+
+    print(f"[Migration Error] {_me}")
+
+
+
 def apply_profile_settings(settings: dict):
     """프로필 설정 딕셔너리를 세션 상태 및 각 서브시스템에 적용"""
     # 즐겨찾기 적용
@@ -620,6 +640,8 @@ def _render_access_gate():
                     )
 
                     if ok:
+
+                        st.session_state.logged_in_user = login_id.strip()
 
                         # 현재 브라우저 토큰을 approved에 등록
 
