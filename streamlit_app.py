@@ -3590,28 +3590,29 @@ def create_plotly_candlestick_chart(df, title, fib_levels=None, sma_cols=None, b
 
                 short_lbl = label.split(' ')[0]
 
-                fig.add_hline(
-
-                    y=val,
-
-                    line_dash=dash_type,
-
-                    line_color=base_color,
-
-                    line_width=1.0,
-
-                    opacity=opacity,
-
-                    annotation_text=f" {scale_prefix} {short_lbl} ({fmt_chart_val(val, is_usd)})",
-
-                    annotation_position="right",
-
-                    annotation_font_size=8,
-
-                    annotation_font_color=base_color,
-
+                fig.add_trace(
+                    go.Scatter(
+                        x=[df.index[0], df.index[-1]],
+                        y=[val, val],
+                        mode="lines",
+                        line=dict(color=base_color, width=1.0, dash=dash_type),
+                        opacity=opacity,
+                        showlegend=False,
+                        hoverinfo="skip"
+                    ),
                     row=1, col=1
+                )
 
+                fig.add_annotation(
+                    x=df.index[-1],
+                    y=val,
+                    text=f" {scale_prefix} {short_lbl} ({fmt_chart_val(val, is_usd)})",
+                    showarrow=False,
+                    xanchor="left",
+                    yanchor="middle",
+                    font=dict(size=8, color=base_color),
+                    opacity=opacity,
+                    row=1, col=1
                 )
 
     if show_l and l_levels:
