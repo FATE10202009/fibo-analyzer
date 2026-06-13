@@ -251,6 +251,142 @@ def apply_profile_settings(settings: dict):
     if settings.get("gemini_api_key"):
         st.session_state["_saved_gemini_api_key"] = settings["gemini_api_key"]
 
+@st.dialog("🎯 피보나치 핵심 투자 가이드", width="large")
+
+def show_investment_guide(ticker, current_price, best_buy, stop_loss, stop_loss_desc, targets, score_label, score, rate, is_usd):
+
+    st.markdown(f"### 📊 {ticker} 투자 의사결정 요약 가이드")
+
+    st.write(f"현재 가격: {fmt_price(current_price, rate, is_usd)}")
+
+    st.markdown(f"**종합 판단: {score_label} (기술 평가 점수: {score}/100점)**")
+
+    st.divider()
+
+    
+
+    # 가격 메트릭 2열 배치
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        st.metric(
+
+            label="🎯 황금 진입 가격 (DCA 추천)", 
+
+            value=fmt_price(best_buy, rate, is_usd),
+
+            help="여러 타임프레임의 지지선이 밀집되어 있어 기술적 반등 확률이 가장 높은 추천 진입 가격입니다."
+
+        )
+
+    with col2:
+
+        st.metric(
+
+            label="⚠️ 리스크 손절가 (Stop Loss)", 
+
+            value=fmt_price(stop_loss, rate, is_usd),
+
+            delta=f"-{((best_buy - stop_loss)/best_buy)*100:.1f}%" if best_buy > 0 else "0.0%",
+
+            delta_color="inverse",
+
+            help=f"직전 지지선 이탈 시 리스크를 방어해야 하는 최종 손절선입니다. ({stop_loss_desc})"
+
+        )
+
+        
+
+    st.write("")
+
+    st.markdown("#### 📈 단계별 목표 실현 가격 (Targets)")
+
+    t_cols = st.columns(3)
+
+    with t_cols[0]:
+
+        st.metric(
+
+            label="🏁 1차 목표가", 
+
+            value=fmt_price(targets[0], rate, is_usd),
+
+            delta=f"+{((targets[0] - best_buy)/best_buy)*100:.1f}%" if best_buy > 0 else "0.0%",
+
+            help="가장 가까운 상단 저항선으로, 단기 매물벽 돌파 및 1차 수익 실현에 적합한 가격입니다."
+
+        )
+
+    with t_cols[1]:
+
+        st.metric(
+
+            label="🚀 2차 목표가", 
+
+            value=fmt_price(targets[1], rate, is_usd),
+
+            delta=f"+{((targets[1] - best_buy)/best_buy)*100:.1f}%" if best_buy > 0 else "0.0%",
+
+            help="두 번째 피보나치 저항선으로, 강한 추세 확장 시 도달을 노려볼 수 있는 중기 목표가입니다."
+
+        )
+
+    with t_cols[2]:
+
+        st.metric(
+
+            label="💎 3차 목표가", 
+
+            value=fmt_price(targets[2], rate, is_usd),
+
+            delta=f"+{((targets[2] - best_buy)/best_buy)*100:.1f}%" if best_buy > 0 else "0.0%",
+
+            help="역사적 고점 또는 대규모 매물 저항선 부근으로, 파동 완성 시점의 최종 수익 실현가입니다."
+
+        )
+
+        
+
+    st.write("")
+
+    with st.expander("📚 각 지표별 상세 가이드 및 대처 요령 읽기", expanded=True):
+
+        st.markdown(f"""
+
+        * **🟢 황금 매수가 (진입)**:
+
+          * *설명*: 여러 타임프레임(L/M/S/XS)의 지지선이 겹친 구간으로, 봇의 매수 벽이 두껍게 깔려 반등 신뢰도가 높은 가격대입니다.
+
+          * *대응*: 이 가격대 근처(±1.5%)에 도달하면 분할 매수로 진입 포지션을 차근차근 모아가는 것이 좋습니다.
+
+        * **🔴 리스크 손절가 (방어)**:
+
+          * *설명*: 황금 진입가 아래에 위치한 최종 지지선이 붕괴되어 하방 추세가 가속화될 위험이 높은 가격대입니다.
+
+          * *대응*: 일봉 종가 기준으로 이 가격을 하회하여 마감하면, 리스크 관리 차원에서 포지션을 정리하거나 비중을 축소하는 것을 적극 권장합니다.
+
+        * **📈 1~3차 목표가 (수익 실현)**:
+
+          * *1차*: 상승 시 일시적인 매물 저항을 받는 단기 변곡점이므로, 보수적인 투자자라면 **일부 물량(30%~50%)을 분할 익절**하여 현금을 확보하기 좋습니다.
+
+          * *2차*: 강력한 저항선이 뚫려 추세가 완전히 상방으로 폭발할 때 도달하는 지점으로, **수익률 극대화**를 노리는 중기 포지션의 주요 익절선입니다.
+
+          * *3차*: 역사적 고점 내지 강력한 대형 매물대로 대량의 차익 실현 물량이 출회될 수 있어, **나머지 물량 전체를 매도**하여 파동을 최종 매듭짓기 좋은 장기 목표가입니다.
+
+        """)
+
+        
+
+    st.write("")
+
+    if st.button("확인하고 대시보드 분석하기", use_container_width=True, type="primary"):
+
+        st.rerun()
+
+
+
 # ────────────────────────────────────────────────────────────
 
 # 🔐 접근 제어 게이트 (Access Control Gate)
@@ -4112,6 +4248,92 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 
     best_buy_str = fmt_price(best_buy, rate, is_usd)
 
+    # ── 손절가(Stop Loss) 및 1~3차 목표가(Target Prices) 동적 계산 ──
+
+    all_fib_prices = sorted(list(set(
+
+        list(l_levels.values()) + 
+
+        list(m_levels.values()) + 
+
+        list(s_levels.values()) + 
+
+        list(xs_levels.values())
+
+    )))
+
+    
+
+    # 1. 손절가 계산 (황금가격보다 한 단계 아래 지지선에서 2% 추가 조정 고려)
+
+    lower_prices = [p for p in all_fib_prices if p < best_buy * 0.999]
+
+    if lower_prices:
+
+        support_below = lower_prices[-1]
+
+        stop_loss = support_below * 0.98
+
+        stop_loss_desc = "하단 지지선 이탈(-2%) 기준"
+
+    else:
+
+        stop_loss = best_buy * 0.93
+
+        stop_loss_desc = "진입가 대비 -7% 고정 비율 기준"
+
+        
+
+    # 2. 1~3차 목표가 계산 (황금가격보다 높은 피보나치 저항선들을 순서대로 추출)
+
+    higher_prices = [p for p in all_fib_prices if p > best_buy * 1.001]
+
+    targets = []
+
+    
+
+    # 1차 목표가
+
+    if len(higher_prices) >= 1:
+
+        targets.append(higher_prices[0])
+
+    else:
+
+        targets.append(best_buy * 1.05)
+
+        
+
+    # 2차 목표가
+
+    if len(higher_prices) >= 2:
+
+        targets.append(higher_prices[1])
+
+    else:
+
+        targets.append(targets[0] * 1.05)
+
+        
+
+    # 3차 목표가
+
+    if len(higher_prices) >= 3:
+
+        targets.append(higher_prices[2])
+
+    else:
+
+        l_high_val = l_levels.get('1.000 (고점)', best_buy * 1.15)
+
+        if l_high_val > targets[-1]:
+
+            targets.append(l_high_val)
+
+        else:
+
+            targets.append(targets[-1] * 1.05)
+
     # 6. 애널리스트 투자의견 매핑
 
     rec = info.get('recommendationKey') if info else None
@@ -4314,6 +4536,14 @@ def fetch_and_analyze_data(query, market, api_key=None, nest_mode="time", data_s
 
         'best_buy_desc': best_buy_desc,
 
+        'best_buy': best_buy,
+
+        'stop_loss': stop_loss,
+
+        'stop_loss_desc': stop_loss_desc,
+
+        'target_prices': targets,
+
         'rec_ko': rec_ko,
 
         'is_usd': is_usd,
@@ -4391,6 +4621,22 @@ with main_container:
             results = fetch_and_analyze_data(st.session_state.search_ticker, market_opt, api_key=user_api_key, nest_mode=nest_mode, data_source=data_source)
 
             st.session_state.last_successful_ticker = results['ticker']
+
+            # ── [투자 가이드 팝업 자동 트리거 세팅] ──
+
+            if "last_shown_popup_ticker" not in st.session_state:
+
+                st.session_state.last_shown_popup_ticker = None
+
+            if "trigger_popup" not in st.session_state:
+
+                st.session_state.trigger_popup = False
+
+            if st.session_state.last_shown_popup_ticker != results['ticker']:
+
+                st.session_state.trigger_popup = True
+
+                st.session_state.last_shown_popup_ticker = results['ticker']
 
             process_limit_orders(results['ticker'], results['current_price'])
 
@@ -4528,11 +4774,11 @@ with main_container:
 
             # ────────────────────────────────────────────────────────────
 
-            col_btns = st.columns(2)
+            col_btns = st.columns(3)
 
             with col_btns[0]:
 
-                vt_btn_label = "💸 실시간 가상매매 패널 닫기 ✖" if st.session_state.show_virtual_trading else "💸 실시간 가상매매 패널 열기 🔓"
+                vt_btn_label = "💸 가상매매 패널 닫기 ✖" if st.session_state.show_virtual_trading else "💸 가상매매 패널 열기 🔓"
 
                 if st.button(vt_btn_label, key=f"toggle_virtual_trading_main_btn_{results['ticker']}", use_container_width=True):
 
@@ -4544,11 +4790,19 @@ with main_container:
 
             with col_btns[1]:
 
-                chat_btn_label = "💬 AI 금융비서 대화방 닫기 ✖" if st.session_state.show_ai_chat else "💬 AI 금융비서 대화방 열기 🔓"
+                chat_btn_label = "💬 AI 금융비서 닫기 ✖" if st.session_state.show_ai_chat else "💬 AI 금융비서 열기 🔓"
 
                 if st.button(chat_btn_label, key=f"toggle_ai_chat_main_btn_{results['ticker']}", use_container_width=True):
 
                     st.session_state.show_ai_chat = not st.session_state.show_ai_chat
+
+                    st.rerun()
+
+            with col_btns[2]:
+
+                if st.button("🎯 투자 가이드 팝업 열기", key=f"reopen_guide_popup_btn_{results['ticker']}", use_container_width=True):
+
+                    st.session_state.trigger_popup = True
 
                     st.rerun()
 
@@ -4969,6 +5223,36 @@ with main_container:
                     st.rerun()
 
                 render_virtual_trading_panel(results)
+
+        # ── [투자 가이드 팝업 모달 실행 트리거] ──
+
+        if st.session_state.get("trigger_popup", False):
+
+            st.session_state.trigger_popup = False
+
+            show_investment_guide(
+
+                results['ticker'],
+
+                results['current_price'],
+
+                results['best_buy'],
+
+                results['stop_loss'],
+
+                results['stop_loss_desc'],
+
+                results['target_prices'],
+
+                results['score_label'],
+
+                results['composite_score'],
+
+                results['rate'],
+
+                results['is_usd']
+
+            )
 
     except Exception as e:
 
