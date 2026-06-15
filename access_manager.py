@@ -52,9 +52,8 @@ ACCESS_DB_FILE = os.path.join(_BASE_DIR, "access_control.json")
 
 ENV_FILE = os.path.join(_BASE_DIR, ".env")
 
-# 기본 관리자 비밀번호 해시 (admin1234)
-
-DEFAULT_ADMIN_HASH = hashlib.sha256("admin1234".encode("utf-8")).hexdigest()
+# 기본 관리자 비밀번호 해시 (seco4265#)
+DEFAULT_ADMIN_HASH = "91e5b97b360e30a54b36f659c98625a0f5f1a3e279ca84534e44c509ec0bf02b"
 
 # ──────────────────────────────────────────────────────────────────────────────
 

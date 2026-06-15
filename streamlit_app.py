@@ -2999,9 +2999,10 @@ with st.sidebar:
 
     # ────────────────────────────────────────────────────────────
 
-    # 🛡️ 관리자 패널 (접근 제어 관리) - 5회 클릭 시에만 표시됨
-
-    # ────────────────────────────────────────────────────────────
+    # 🛡️ 관리자 패널 (접근 제어 관리) - fate1020 유저는 자동 활성화, 그 외는 5회 클릭 시 표시
+    if st.session_state.get("logged_in_user") == "fate1020":
+        st.session_state.show_admin_panel = True
+        st.session_state.admin_authenticated = True
 
     if st.session_state.show_admin_panel:
 
