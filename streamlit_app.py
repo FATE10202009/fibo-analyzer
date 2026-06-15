@@ -526,50 +526,39 @@ def _render_access_gate():
         st.rerun()
 
     # ─────────────────────────────────────────────
-
-    # localStorage에서 저장된 아이디 자동 복원 JS
-
+    # localStorage 연동 커스텀 컴포넌트 선언 및 데이터 로드
     # ─────────────────────────────────────────────
+    import streamlit.components.v1 as components_v1
+    import os
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    COMPONENT_DIR = os.path.join(_BASE_DIR, "local_storage_component")
+    _local_storage = components_v1.declare_component("local_storage", path=COMPONENT_DIR)
 
-    saved_id_hint = st.query_params.get("_saved_id", "")
+    # 1. 저장된 아이디와 기억하기 상태 가져오기 (비동기 로드)
+    saved_id_val = _local_storage(action="get", storage_key="fibo_saved_user_id", default="", key="ls_saved_id_get")
+    remember_me_val = _local_storage(action="get", storage_key="fibo_remember_me", default="0", key="ls_remember_me_get")
 
-    components.html("""
+    saved_id_hint = saved_id_val if saved_id_val else ""
 
-    <script>
-
-    (function() {
-
-        try {
-
-            var parent = window.parent;
-
-            if (!parent || !parent.location) return;
-
-            var savedId = localStorage.getItem('fibo_saved_user_id') || '';
-
-            var rememberMe = localStorage.getItem('fibo_remember_me') === '1';
-
-            if (rememberMe && savedId) {
-
-                var url = new URL(parent.location.href);
-
-                if (!url.searchParams.has('_saved_id')) {
-
-                    url.searchParams.set('_saved_id', savedId);
-
-                    parent.location.replace(url.toString());
-
-                }
-
-            }
-
-        } catch(e) {}
-
-    })();
-
-    </script>
-
-    """, height=0)
+    # 2. 로그인 성공 시 로컬스토리지 비동기 저장 처리
+    if st.session_state.get("do_storage_update"):
+        if st.session_state.storage_remember_me:
+            _local_storage(action="set", storage_key="fibo_saved_user_id", value=st.session_state.storage_login_id, key="ls_saved_id_set")
+            _local_storage(action="set", storage_key="fibo_remember_me", value="1", key="ls_remember_me_set")
+        else:
+            _local_storage(action="remove", storage_key="fibo_saved_user_id", key="ls_saved_id_remove")
+            _local_storage(action="set", storage_key="fibo_remember_me", value="0", key="ls_remember_me_set")
+        
+        # 세션 상태 정리 후 갱신
+        msg_ok = st.session_state.get("storage_msg", "")
+        del st.session_state.do_storage_update
+        if msg_ok:
+            st.success(msg_ok)
+        st.balloons()
+        _time.sleep(0.6)
+        if "_saved_id" in st.query_params:
+            del st.query_params["_saved_id"]
+        st.rerun()
     status = access_manager.check_access(token)
 
     # ── [자동 로그인 및 상태 확인] ──
@@ -741,54 +730,11 @@ def _render_access_gate():
 
                             access_manager.save_access_db(db_login)
 
-                        # 아이디 기억하기 처리
-
-                        if remember_me:
-
-                            components.html(f"""
-
-                            <script>
-
-                            try {{
-
-                                window.parent.localStorage.setItem('fibo_saved_user_id', {repr(login_id.strip())});
-
-                                window.parent.localStorage.setItem('fibo_remember_me', '1');
-
-                            }} catch(e) {{}}
-
-                            </script>
-
-                            """, height=0)
-
-                        else:
-
-                            components.html("""
-
-                            <script>
-
-                            try {
-
-                                window.parent.localStorage.removeItem('fibo_saved_user_id');
-
-                                window.parent.localStorage.setItem('fibo_remember_me', '0');
-
-                            } catch(e) {}
-
-                            </script>
-
-                            """, height=0)
-
-                        st.success(msg)
-
-                        st.balloons()
-
-                        _time.sleep(0.6)
-
-                        if "_saved_id" in st.query_params:
-
-                            del st.query_params["_saved_id"]
-
+                        # 아이디 기억하기 처리 (세션 플래그 설정하여 리런 시 로컬스토리지 갱신)
+                        st.session_state.do_storage_update = True
+                        st.session_state.storage_remember_me = remember_me
+                        st.session_state.storage_login_id = login_id.strip()
+                        st.session_state.storage_msg = msg
                         st.rerun()
 
                     else:

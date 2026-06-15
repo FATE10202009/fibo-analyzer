@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script>
+    function sendValue(value) {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setComponentValue",
+        value: value
+      }, "*");
+    }
+
+    function init() {
+      // Set iframe height to 0 to make it completely invisible
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setFrameHeight",
+        height: 0
+      }, "*");
+
+      // Handshake with Streamlit
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:componentReady",
+        apiVersion: 1
+      }, "*");
+    }
+
+    window.addEventListener("message", (event) => {
+      if (event.data.type === "streamlit:render") {
+        const args = event.data.args;
+        const action = args.action;
+        const storageKey = args.storage_key; // Use storage_key to avoid conflict with Streamlit's key
+        const value = args.value;
+
+        if (action === "get") {
+          const stored = localStorage.getItem(storageKey);
+          sendValue(stored);
+        } else if (action === "set") {
+          localStorage.setItem(storageKey, value);
+          sendValue(value);
+        } else if (action === "remove") {
+          localStorage.removeItem(storageKey);
+          sendValue(null);
+        }
+      }
+    });
+
+    document.addEventListener("DOMContentLoaded", init);
+  </script>
+</head>
+<body style="margin: 0; padding: 0; overflow: hidden; background: transparent;">
+</body>
+</html>
