@@ -68,42 +68,81 @@ def _empty_db() -> dict:
 
     return {"approved": [], "pending": [], "denied": []}
 
+import re
+
+def _is_sha256(s: str) -> bool:
+    return len(s) == 64 and bool(re.match(r"^[0-9a-fA-F]{64}$", s))
+
+def _merge_secrets_users(db: dict) -> None:
+    """Streamlit secrets에 등록된 유저 정보를 DB 캐시에 병합합니다."""
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "users" in st.secrets:
+            secrets_users = st.secrets["users"]
+            if "users" not in db:
+                db["users"] = {}
+            for uid, info in secrets_users.items():
+                uid = uid.strip()
+                if not uid:
+                    continue
+                # 이미 로컬 DB에 등록되어 있으면 덮어쓰지 않음
+                if uid in db["users"]:
+                    continue
+                
+                pw_hash = ""
+                name = uid
+                token = ""
+                
+                if isinstance(info, str):
+                    info_str = info.strip()
+                    if _is_sha256(info_str):
+                        pw_hash = info_str
+                    else:
+                        pw_hash = hashlib.sha256(info_str.encode("utf-8")).hexdigest()
+                elif isinstance(info, dict):
+                    pw_str = str(info.get("password", "")).strip()
+                    hash_val = str(info.get("password_hash", "")).strip()
+                    if hash_val and _is_sha256(hash_val):
+                        pw_hash = hash_val
+                    elif pw_str:
+                        if _is_sha256(pw_str):
+                            pw_hash = pw_str
+                        else:
+                            pw_hash = hashlib.sha256(pw_str.encode("utf-8")).hexdigest()
+                    name = info.get("name", uid)
+                    token = info.get("token", "")
+                
+                db["users"][uid] = {
+                    "password_hash": pw_hash,
+                    "token": token,
+                    "name": name,
+                    "created_at": "Streamlit Secrets"
+                }
+    except Exception as e:
+        pass
+
 def load_access_db(force_reload: bool = False) -> dict:
-
     """access_control.json 을 로드합니다. 없으면 빈 DB를 생성합니다."""
-
     global _DB_CACHE
-
     if _DB_CACHE is not None and not force_reload:
-
         return _DB_CACHE
 
     if os.path.exists(ACCESS_DB_FILE):
-
         try:
-
             with open(ACCESS_DB_FILE, "r", encoding="utf-8") as f:
-
                 _DB_CACHE = json.load(f)
-
                 # 키 누락 보완
-
                 for key in ("approved", "pending", "denied"):
-
                     if key not in _DB_CACHE:
-
                         _DB_CACHE[key] = []
-
+                _merge_secrets_users(_DB_CACHE)
                 return _DB_CACHE
-
         except Exception as e:
-
             print(f"[AccessManager] DB 로드 실패: {e}")
 
     _DB_CACHE = _empty_db()
-
+    _merge_secrets_users(_DB_CACHE)
     save_access_db(_DB_CACHE)
-
     return _DB_CACHE
 
 def save_access_db(db: dict) -> None:
