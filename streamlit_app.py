@@ -534,19 +534,24 @@ def _render_access_gate():
     COMPONENT_DIR = os.path.join(_BASE_DIR, "local_storage_component")
     _local_storage = components_v1.declare_component("local_storage", path=COMPONENT_DIR)
 
-    # 1. 저장된 아이디와 기억하기 상태 가져오기 (비동기 로드)
+    # 1. 저장된 아이디·비밀번호·기억하기 상태 가져오기 (비동기 로드)
     saved_id_val = _local_storage(action="get", storage_key="fibo_saved_user_id", default="", key="ls_saved_id_get")
+    saved_pw_val = _local_storage(action="get", storage_key="fibo_saved_user_pw", default="", key="ls_saved_pw_get")
     remember_me_val = _local_storage(action="get", storage_key="fibo_remember_me", default="0", key="ls_remember_me_get")
 
     saved_id_hint = saved_id_val if saved_id_val else ""
+    saved_pw_hint = saved_pw_val if saved_pw_val else ""
+    has_saved_credentials = bool(saved_id_hint and saved_pw_hint)
 
     # 2. 로그인 성공 시 로컬스토리지 비동기 저장 처리
     if st.session_state.get("do_storage_update"):
         if st.session_state.storage_remember_me:
             _local_storage(action="set", storage_key="fibo_saved_user_id", value=st.session_state.storage_login_id, key="ls_saved_id_set")
+            _local_storage(action="set", storage_key="fibo_saved_user_pw", value=st.session_state.storage_login_pw, key="ls_saved_pw_set")
             _local_storage(action="set", storage_key="fibo_remember_me", value="1", key="ls_remember_me_set")
         else:
             _local_storage(action="remove", storage_key="fibo_saved_user_id", key="ls_saved_id_remove")
+            _local_storage(action="remove", storage_key="fibo_saved_user_pw", key="ls_saved_pw_remove")
             _local_storage(action="set", storage_key="fibo_remember_me", value="0", key="ls_remember_me_set")
         
         # 세션 상태 정리 후 갱신
@@ -559,6 +564,24 @@ def _render_access_gate():
         if "_saved_id" in st.query_params:
             del st.query_params["_saved_id"]
         st.rerun()
+
+    # 3. 저장된 자격증명으로 원클릭 자동 로그인 시도
+    if st.session_state.get("_try_auto_login") and has_saved_credentials:
+        del st.session_state["_try_auto_login"]
+        ok, msg, user_token = access_manager.login_with_id_password(
+            saved_id_hint, saved_pw_hint, token
+        )
+        if ok:
+            st.session_state.logged_in_user = saved_id_hint
+            st.session_state.do_storage_update = True
+            st.session_state.storage_remember_me = True
+            st.session_state.storage_login_id = saved_id_hint
+            st.session_state.storage_login_pw = saved_pw_hint
+            st.session_state.storage_msg = msg
+            st.rerun()
+        else:
+            # 저장된 비밀번호가 틀리면 삭제
+            st.session_state["_auto_login_error"] = msg
     status = access_manager.check_access(token)
 
     # ── [자동 로그인 및 상태 확인] ──
@@ -656,79 +679,88 @@ def _render_access_gate():
 
         with login_tab:
 
-            st.markdown("""<p style='color:#94A3B8; font-size:13px; margin:8px 0 14px 0; line-height:1.7;'> 신청 승인 후 발급된 <b style="color:#60A5FA;">아이디/비밀번호</b>로 로그인하세요.<br> <span style='color:#818CF8; font-size:12px;'>💡 "아이디 기억"을 체크하면 다음 방문 시 자동 입력됩니다.</span> </p>""", unsafe_allow_html=True)
+            # ── 원클릭 자동 로그인 버튼 (저장된 자격증명이 있을 때만 표시) ──
+            if has_saved_credentials:
+                auto_err = st.session_state.pop("_auto_login_error", None)
+                if auto_err:
+                    st.error(f"❌ 저장된 비밀번호가 맞지 않습니다. 다시 입력해 주세요. ({auto_err})")
+                    # 잘못된 비밀번호 삭제
+                    st.session_state.do_storage_update = True
+                    st.session_state.storage_remember_me = False
+                    st.session_state.storage_login_id = ""
+                    st.session_state.storage_login_pw = ""
+                    st.session_state.storage_msg = ""
+                else:
+                    st.markdown(f"""
+                    <div style="background:rgba(96,165,250,0.08); border:1px solid rgba(96,165,250,0.25);
+                                border-radius:12px; padding:14px 18px; margin-bottom:14px; display:flex;
+                                align-items:center; gap:12px;">
+                        <span style="font-size:22px;">👤</span>
+                        <div>
+                            <div style="color:#60A5FA; font-weight:700; font-size:15px;">{saved_id_hint}</div>
+                            <div style="color:#94A3B8; font-size:12px;">저장된 계정으로 바로 로그인</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("⚡ 자동 로그인", use_container_width=True, type="primary", key="auto_login_btn"):
+                        st.session_state["_try_auto_login"] = True
+                        st.rerun()
+                    st.markdown("<div style='text-align:center; color:#64748B; font-size:12px; margin:8px 0 4px 0;'>또는 다른 계정으로 로그인</div>", unsafe_allow_html=True)
+
+            else:
+                st.markdown("""<p style='color:#94A3B8; font-size:13px; margin:8px 0 14px 0; line-height:1.7;'>
+                    신청 승인 후 발급된 <b style="color:#60A5FA;">아이디/비밀번호</b>로 로그인하세요.<br>
+                    <span style='color:#818CF8; font-size:12px;'>💡 "아이디/비밀번호 기억"을 체크하면 다음 방문 시 자동 로그인됩니다.</span>
+                </p>""", unsafe_allow_html=True)
 
             with st.form("id_pw_login_form", clear_on_submit=False):
 
                 login_id = st.text_input(
-
                     "👤 아이디",
-
                     value=saved_id_hint,
-
                     placeholder="아이디 입력",
-
                     key="login_id_input"
-
                 )
 
                 login_pw = st.text_input(
-
                     "🔒 비밀번호",
-
                     type="password",
-
-                    placeholder="비밀번호 입력",
-
+                    value="",
+                    placeholder="비밀번호 입력" if not has_saved_credentials else "저장된 비밀번호 변경 시 입력",
                     key="login_pw_input"
-
                 )
 
                 remember_me = st.checkbox(
-
-                    "🗃️ 이 기기에서 아이디 기억하기",
-
-                    value=(saved_id_hint != "")
-
+                    "🗃️ 이 기기에서 아이디/비밀번호 기억하기",
+                    value=has_saved_credentials
                 )
 
                 login_btn = st.form_submit_button(
-
-                    "🚀 로그인", use_container_width=True, type="primary"
-
+                    "🚀 로그인", use_container_width=True,
+                    type="secondary" if has_saved_credentials else "primary"
                 )
 
             if login_btn:
+                # 비밀번호 미입력 시 저장된 비밀번호 사용
+                pw_to_use = login_pw.strip() if login_pw.strip() else saved_pw_hint
 
-                if not login_id.strip() or not login_pw.strip():
-
+                if not login_id.strip() or not pw_to_use:
                     st.error("아이디와 비밀번호를 모두 입력해 주세요.")
-
                 else:
-
                     ok, msg, user_token = access_manager.login_with_id_password(
-
-                        login_id.strip(), login_pw, token
-
+                        login_id.strip(), pw_to_use, token
                     )
 
                     if ok:
-
                         st.session_state.logged_in_user = login_id.strip()
-
-                        # 참고: 현재 브라우저 토큰의 approved 등록은
-                        # login_with_id_password() 내부에서 이미 처리됩니다.
-                        # (중복 force_reload → save 로 인한 경쟁 조건 방지)
-
-                        # 아이디 기억하기 처리 (세션 플래그 설정하여 리런 시 로컬스토리지 갱신)
+                        # 아이디/비밀번호 기억하기 처리
                         st.session_state.do_storage_update = True
                         st.session_state.storage_remember_me = remember_me
                         st.session_state.storage_login_id = login_id.strip()
+                        st.session_state.storage_login_pw = pw_to_use
                         st.session_state.storage_msg = msg
                         st.rerun()
-
                     else:
-
                         st.error(f"❌ {msg}")
 
         # ────────────────────────────
