@@ -716,19 +716,9 @@ def _render_access_gate():
 
                         st.session_state.logged_in_user = login_id.strip()
 
-                        # 현재 브라우저 토큰을 approved에 등록
-
-                        db_login = access_manager.load_access_db(force_reload=True)
-
-                        if token not in db_login["approved"]:
-
-                            db_login["approved"].append(token)
-
-                            db_login["pending"] = [e for e in db_login["pending"] if e.get("token") != token]
-
-                            db_login["denied"] = [t for t in db_login["denied"] if t != token]
-
-                            access_manager.save_access_db(db_login)
+                        # 참고: 현재 브라우저 토큰의 approved 등록은
+                        # login_with_id_password() 내부에서 이미 처리됩니다.
+                        # (중복 force_reload → save 로 인한 경쟁 조건 방지)
 
                         # 아이디 기억하기 처리 (세션 플래그 설정하여 리런 시 로컬스토리지 갱신)
                         st.session_state.do_storage_update = True

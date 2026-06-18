@@ -117,6 +117,10 @@ def _merge_secrets_users(db: dict) -> None:
                     "name": name,
                     "created_at": "Streamlit Secrets"
                 }
+                
+                # secrets에 token이 있으면 approved 목록에도 자동 추가
+                if token and token not in db.get("approved", []):
+                    db.setdefault("approved", []).append(token)
     except Exception as e:
         pass
 
@@ -594,6 +598,7 @@ def login_with_id_password(user_id: str, password: str, current_token: str = "")
                 return False, "아이디 또는 비밀번호가 올바르지 않습니다.", ""
 
         # 현재 로그인한 브라우저의 토큰이 있으면 계정의 토큰을 업데이트
+        old_token = users[user_id].get("token", "")
         if current_token:
             users[user_id]["token"] = current_token
 

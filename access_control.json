@@ -1,0 +1,38 @@
+{
+  "approved": [
+    "CnAYiZKomng8ARp94saq",
+    "Eye3y-Ksx3URpl3JwMgbpy_shlwvgDoM",
+    "some_token"
+  ],
+  "pending": [],
+  "denied": [],
+  "users": {
+    "fate1020": {
+      "password_hash": "91e5b97b360e30a54b36f659c98625a0f5f1a3e279ca84534e44c509ec0bf02b",
+      "token": "Eye3y-Ksx3URpl3JwMgbpy_shlwvgDoM",
+      "name": "fate1020",
+      "created_at": "2026-06-13 14:15",
+      "settings": {
+        "show_virtual_trading": false
+      }
+    },
+    "testuser": {
+      "password_hash": "937e8d5fbb48bd4949536cd65b8d35c426b80d2f830c5c308e2cdec422ae2244",
+      "token": "CnAYiZKomng8ARp94saq",
+      "name": "테스터",
+      "created_at": "2026-06-13 15:57"
+    },
+    "secretsuser1": {
+      "password_hash": "6e659deaa85842cdabb5c6305fcc40033ba43772ec00d45c2a3c921741a5e377",
+      "token": "some_token",
+      "name": "secretsuser1",
+      "created_at": "Streamlit Secrets"
+    },
+    "secretsuser2": {
+      "password_hash": "91e5b97b360e30a54b36f659c98625a0f5f1a3e279ca84534e44c509ec0bf02b",
+      "token": "",
+      "name": "secretsuser2",
+      "created_at": "Streamlit Secrets"
+    }
+  }
+}

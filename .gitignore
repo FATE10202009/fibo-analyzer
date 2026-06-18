@@ -27,8 +27,8 @@ ehthumbs.db
 Desktop.ini
 .DS_Store
 
-# FiboAnalyzer 접근 제어 및 사용자 개인 설정 데이터 (보안 민감 정보)
-access_control.json
+# FiboAnalyzer 개인 설정 데이터
+# access_control.json 은 Streamlit Cloud 재시작 후 계정 유지를 위해 Git으로 관리합니다
 last_virtual_user.txt
 ui_settings.json
 virtual_data/

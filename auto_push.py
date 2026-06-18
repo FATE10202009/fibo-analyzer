@@ -5,6 +5,8 @@ import subprocess
 
 # 감시할 파일 확장자 목록 (소스코드 및 텍스트 설정)
 WATCHED_EXTENSIONS = ('.py', '.txt', '.html', '.css')
+# 확장자와 무관하게 항상 감시할 특정 파일 (사용자 계정 DB)
+WATCHED_FILES = ('access_control.json',)
 # 제외할 폴더나 파일 (가상 거래 내역 json 파일 등이 저장되는 virtual_data와 git 등은 감시 제외)
 EXCLUDED_DIRS = ('virtual_data', '.git', '.gemini', '__pycache__', '.idea', '.vscode')
 
@@ -14,7 +16,9 @@ def get_last_modified_time(path):
         # 제외 폴더는 아예 탐색하지 않도록 함
         dirs[:] = [d for d in dirs if d not in EXCLUDED_DIRS]
         for file in files:
-            if file.endswith(WATCHED_EXTENSIONS) and file != 'auto_push.py':
+            is_watched_ext = file.endswith(WATCHED_EXTENSIONS) and file != 'auto_push.py'
+            is_watched_file = file in WATCHED_FILES
+            if is_watched_ext or is_watched_file:
                 file_path = os.path.join(root, file)
                 try:
                     mtime = os.path.getmtime(file_path)
