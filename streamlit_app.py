@@ -120,27 +120,41 @@ components.html(
 
     <script>
 
-        // 부모 창의 html lang 속성을 한국어로 강제 설정하여 번역 오인 차단
+        // 부모 창의 html lang 속성을 한국어로 강제 설정하여 번역 오인 차단 (중복 실행 방지)
 
-        window.parent.document.documentElement.lang = 'ko';
+        if (window.parent.document.documentElement.lang !== 'ko') {
 
-        
+            window.parent.document.documentElement.lang = 'ko';
 
-        // 부모 창의 head에 notranslate 메타 태그 추가
+        }
 
-        var meta = window.parent.document.createElement('meta');
 
-        meta.name = 'google';
 
-        meta.content = 'notranslate';
+        // 부모 창의 head에 notranslate 메타 태그 추가 (이미 있으면 재추가하지 않음 - 매 rerun마다 head가 무한히 쌓이는 것을 방지)
 
-        window.parent.document.head.appendChild(meta);
+        if (!window.parent.document.querySelector('meta[data-fibo-notranslate]')) {
 
-        
+            var meta = window.parent.document.createElement('meta');
+
+            meta.name = 'google';
+
+            meta.content = 'notranslate';
+
+            meta.setAttribute('data-fibo-notranslate', '1');
+
+            window.parent.document.head.appendChild(meta);
+
+        }
+
+
 
         // 부모 창의 body에 notranslate 클래스 추가
 
-        window.parent.document.body.classList.add('notranslate');
+        if (!window.parent.document.body.classList.contains('notranslate')) {
+
+            window.parent.document.body.classList.add('notranslate');
+
+        }
 
         // ────────────────────────────────────────────────────────────
 
@@ -176,6 +190,16 @@ components.html(
 
             }
 
+            // 세션당 1회만 리다이렉트 시도 (매 rerun마다 중복/동시 location.replace가 호출되어
+
+            // React의 DOM 정리 작업과 충돌, 'removeChild' NotFoundError를 유발하던 문제 수정)
+
+            try {
+
+                if (sessionStorage.getItem('fibo_profile_restore_attempted')) return;
+
+            } catch(e) {}
+
             // 2. URL에 profile_data가 없으면 localStorage에서 복원 시도
 
             try {
@@ -187,6 +211,8 @@ components.html(
                     const pdata = localStorage.getItem('fibo_profile_' + lastProfile);
 
                     if (pdata) {
+
+                        try { sessionStorage.setItem('fibo_profile_restore_attempted', '1'); } catch(e) {}
 
                         url.searchParams.set('profile_name', lastProfile);
 
