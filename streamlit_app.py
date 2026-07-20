@@ -529,6 +529,9 @@ def _render_access_gate():
 
     """접근 제어 게이트를 렌더링합니다. 승인된 사용자만 통과합니다."""
 
+    # 접근 제어 비활성화: 누구나 로그인 없이 바로 이용 가능
+    return
+
     import time as _time
 
     if "gate_admin_click_count" not in st.session_state:
