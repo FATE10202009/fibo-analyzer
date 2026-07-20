@@ -4899,7 +4899,7 @@ with main_container:
 
         # ────────────────────────────────────────────────────────────
 
-        if st.session_state.show_virtual_trading:
+        if False:  # 가상매매 패널 비활성화 (화면에서 완전히 숨김)
 
             left_col, right_col = st.columns([0.62, 0.38], gap="medium")
 
@@ -4943,21 +4943,9 @@ with main_container:
 
             # ────────────────────────────────────────────────────────────
 
-            col_btns = st.columns(3)
+            col_btns = st.columns(2)
 
             with col_btns[0]:
-
-                vt_btn_label = "💸 가상매매 패널 닫기 ✖" if st.session_state.show_virtual_trading else "💸 가상매매 패널 열기 🔓"
-
-                if st.button(vt_btn_label, key=f"toggle_virtual_trading_main_btn_{results['ticker']}", use_container_width=True):
-
-                    st.session_state.show_virtual_trading = not st.session_state.show_virtual_trading
-
-                    save_ui_settings({"show_virtual_trading": st.session_state.show_virtual_trading})
-
-                    st.rerun()
-
-            with col_btns[1]:
 
                 chat_btn_label = "💬 AI 금융비서 닫기 ✖" if st.session_state.show_ai_chat else "💬 AI 금융비서 열기 🔓"
 
@@ -4967,7 +4955,7 @@ with main_container:
 
                     st.rerun()
 
-            with col_btns[2]:
+            with col_btns[1]:
 
                 if st.button("🎯 투자 가이드 팝업 열기", key=f"reopen_guide_popup_btn_{results['ticker']}", use_container_width=True):
 
@@ -5375,7 +5363,7 @@ with main_container:
 
                         st.session_state.messages.append({"role": "assistant", "content": answer})
 
-        if st.session_state.show_virtual_trading:
+        if False:  # 가상매매 패널 비활성화 (화면에서 완전히 숨김)
 
             with right_col:
 
